@@ -48,7 +48,7 @@ class DirectoryToTextApp:
     def _setup_window(self):
         width = self.config.get_setting('Settings', 'width', '800')
         height = self.config.get_setting('Settings', 'height', '700')
-        self.root.title("CodebaseToText v6.7") 
+        self.root.title("CodebaseToText v6.8") 
         self.root.geometry(f"{width}x{height}")
         theme = self.config.get_setting('Settings', 'theme', 'dark')
         if theme not in ['dark', 'light']:
@@ -181,7 +181,7 @@ class DirectoryToTextApp:
     def show_about(self):
         messagebox.showinfo(
             "About CodebaseToText",
-            "Version: 6.7\n\n"
+            "Version: 6.8\n\n"
             "This application helps you package a codebase into a single markdown file for use with Large Language Models."
         )
 

@@ -101,9 +101,8 @@ def build_annotated_tree(root_path, files_for_tree, files_for_content, is_annota
             full_path_parts.append(part)
             current_part_path = os.path.normcase(os.path.abspath(os.path.join(base_dir, *full_path_parts)))
             
-            # Stop descending if we hit a node that's already been marked
             if isinstance(current_level.get(part), str):
-                current_level = None # Invalidate current_level to stop processing this path
+                current_level = None
                 break
 
             if part in ignored_items:
@@ -250,19 +249,19 @@ def generate_text_content(root_path, files_for_tree, files_for_content, is_annot
         update_status("Formatting final output...")
         log_callback("\n--- Formatting final output ---")
         for details in processed_files:
-            relative_path = os.path.relpath(details['path'], base_path_for_relpath).replace(os.sep, '/')
-            final_content.append(f"### `{relative_path}`\n\n")
-            
-            if details['error']:
-                final_content.append(f"```text\n--- CONTENT SKIPPED: {details['error']} ---\n```\n\n")
-            else:
+            # *** CHANGE IS HERE ***
+            # Only generate a content section if the file was successfully read.
+            if not details.get('error') and details.get('content') is not None:
+                relative_path = os.path.relpath(details['path'], base_path_for_relpath).replace(os.sep, '/')
+                final_content.append(f"### `{relative_path}`\n\n")
+                
                 language = get_language_identifier(details['path'])
                 final_content.append(f"```{language}\n")
                 final_content.append(details['content'])
                 final_content.append("\n```\n\n")
-            
-            final_content.append("---\n\n")
-        
+                
+                final_content.append("---\n\n")
+
         update_status("Generation complete!")
         success_callback("".join(final_content))
 
