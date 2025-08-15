@@ -1,7 +1,6 @@
 # main_app.py
 from tkinterdnd2 import DND_FILES
 import tkinter as tk
-from tkinter import ttk
 from tkinter import filedialog, messagebox
 import threading
 import os
