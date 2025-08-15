@@ -56,7 +56,7 @@ class DirectoryToTextApp:
         """Configures the main application window."""
         width = self.config.get_setting('Settings', 'width', '800')
         height = self.config.get_setting('Settings', 'height', '700')
-        self.root.title("Folder to LLM-Ready Text v6.4")
+        self.root.title("Folder to LLM-Ready Text v1.0.0")
         self.root.geometry(f"{width}x{height}")
         
         theme = self.config.get_setting('Settings', 'theme', 'dark')
