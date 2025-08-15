@@ -51,7 +51,8 @@ class UI:
         folder_frame.grid(row=0, column=0, sticky="ew", pady=5)
         folder_frame.grid_columnconfigure(0, weight=1)
         ttk.Entry(folder_frame, textvariable=self.root_dir_var, state='readonly').grid(row=0, column=0, sticky="ew", padx=(0, 5))
-        ttk.Button(folder_frame, text="Browse...", command=self.callbacks['select_folder']).grid(row=0, column=1)
+        self.browse_button = ttk.Button(folder_frame, text="Browse...", command=self.callbacks['select_folder'])
+        self.browse_button.grid(row=0, column=1)
 
         # --- Treeview Frame ---
         tree_container = ttk.LabelFrame(main_frame, text="2. Select Files and Folders", padding="10")
@@ -95,7 +96,10 @@ class UI:
         self.include_all_toggle.pack(fill=tk.X, pady=(0, 5))
 
         self.run_button = ttk.Button(action_frame, text="Generate Text", command=self.callbacks['start_conversion'], style="Accent.TButton", state='disabled')
-        self.run_button.pack(fill=tk.X, ipady=5)
+        self.run_button.pack(fill=tk.X, ipady=5, pady=(5,0))
         
+        self.status_label = ttk.Label(action_frame, text="", anchor="center")
+        self.status_label.pack(fill=tk.X, pady=(5,0))
+
         self.progress_bar = ttk.Progressbar(action_frame, orient='horizontal', mode='determinate')
         self.progress_bar.pack(fill=tk.X, pady=(5, 0))
