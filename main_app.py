@@ -1,6 +1,7 @@
 # main_app.py
 from tkinterdnd2 import DND_FILES
 import tkinter as tk
+from tkinter import ttk
 from tkinter import filedialog, messagebox
 import threading
 import os
@@ -40,8 +41,11 @@ class DirectoryToTextApp:
         }
         self.ui = UI(self.root, callbacks, self.root_dir, self.include_all_var)
         
-        ignored_items = self.config.get_ignored_set()
-        self.tree_manager = TreeViewManager(self.ui.tree, self.root, self.log_message, ignored_items)
+        # Configure a special style for ignored items in the treeview
+        self.ui.tree.tag_configure('ignored', foreground='gray')
+        
+        self.ignored_items = self.config.get_ignored_set()
+        self.tree_manager = TreeViewManager(self.ui.tree, self.root, self.log_message, self.ignored_items)
         
         self._setup_event_bindings()
         
@@ -53,7 +57,7 @@ class DirectoryToTextApp:
         """Configures the main application window."""
         width = self.config.get_setting('Settings', 'width', '800')
         height = self.config.get_setting('Settings', 'height', '700')
-        self.root.title("Folder to LLM-Ready Text v6.2")
+        self.root.title("Folder to LLM-Ready Text v6.4")
         self.root.geometry(f"{width}x{height}")
         
         theme = self.config.get_setting('Settings', 'theme', 'dark')
@@ -104,7 +108,7 @@ class DirectoryToTextApp:
         if self.include_all_var.get():
             self.log_message("Annotated Tree Mode: Tree will show all files. Unchecked files will be marked as omitted.")
         else:
-            self.log_message("Standard Mode: Tree will only show checked files.")
+            self.log_message("Standard Mode: Tree shows all folders, checked files, and a summary of omitted files.")
 
     def start_conversion_thread(self):
         """Validates inputs and starts the background thread for text generation."""
@@ -114,10 +118,11 @@ class DirectoryToTextApp:
             return
 
         files_for_content = self.tree_manager.get_checked_files()
-        files_for_tree = get_all_files(root_path) if self.include_all_var.get() else files_for_content
+        files_for_tree = get_all_files(root_path)
+        is_annotated_mode = self.include_all_var.get()
 
         if not files_for_tree:
-            messagebox.showwarning("No Files Found", "No files were found to build the tree. Check your selection or the directory.")
+            messagebox.showwarning("No Files Found", "No files were found in the directory.")
             return
         if not files_for_content:
             messagebox.showwarning("No Files Selected", "Please check at least one file to include its content in the output.")
@@ -130,7 +135,7 @@ class DirectoryToTextApp:
 
         thread = threading.Thread(
             target=generate_text_content,
-            args=(root_path, files_for_tree, files_for_content, self.log_message, self.display_results, self.enable_run_button, self.update_progress),
+            args=(root_path, files_for_tree, files_for_content, is_annotated_mode, self.ignored_items, self.log_message, self.display_results, self.enable_run_button, self.update_progress),
             daemon=True
         )
         thread.start()
@@ -158,7 +163,7 @@ class DirectoryToTextApp:
         """Displays the about message box."""
         messagebox.showinfo(
             "About Folder to LLM-Ready Text",
-            "Version: 6.2\n\n"
+            "Version: 6.4\n\n"
             "This application helps you package a codebase into a single markdown file for use with Large Language Models."
         )
 
@@ -179,6 +184,5 @@ class DirectoryToTextApp:
         self.config.set_setting('Settings', 'width', self.root.winfo_width())
         self.config.set_setting('Settings', 'height', self.root.winfo_height())
         self.config.set_setting('Settings', 'last_folder', self.root_dir.get())
-        # No need to save theme, it's a user preference in the file
         self.config.save_config()
         self.root.destroy()

@@ -12,8 +12,8 @@ MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 # This set contains common directories and files to ignore during processing.
 # It can be extended via the config.ini file.
 DEFAULT_IGNORED_ITEMS = {
-    '__pycache__', '.git', '.vscode', 'node_modules', '.idea', '.DS_Store',
-    'build', 'dist', '.env'
+    '__pycache__', '.vscode', '.idea', '.DS_Store',
+    'build', '.env'
 }
 
 

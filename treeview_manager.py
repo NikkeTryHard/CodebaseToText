@@ -77,35 +77,38 @@ class TreeViewManager:
         try:
             items = sorted(os.listdir(path), key=lambda item: (not os.path.isdir(os.path.join(path, item)), item.lower()))
             for item in items:
-                if item in self.ignored_items:
-                    continue
-
                 item_path = os.path.join(path, item)
-                node_text = f" {CHECKED_EMOJI} {item}"
+                is_ignored = item in self.ignored_items
 
-                if os.path.isfile(item_path):
-                    details = self._get_file_details(item_path)
-                    node_text += details
+                if is_ignored:
+                    node_text = f" {UNCHECKED_EMOJI} {item}"
+                    node = self.tree.insert(parent_node, "end", text=node_text, open=False, values=[item_path, "ignored"], tags=('ignored',))
+                else:
+                    node_text = f" {CHECKED_EMOJI} {item}"
+                    if os.path.isfile(item_path):
+                        details = self._get_file_details(item_path)
+                        node_text += details
+                    
+                    node = self.tree.insert(parent_node, "end", text=node_text, open=False, values=[item_path, "checked"])
+                    if os.path.isdir(item_path):
+                        self._populate_recursive(item_path, node)
 
-                node = self.tree.insert(parent_node, "end", text=node_text, open=False, values=[item_path, "checked"])
-                if os.path.isdir(item_path):
-                    self._populate_recursive(item_path, node)
         except (PermissionError, FileNotFoundError) as e:
             self.log_message(f"Warning: Cannot access {e.filename}. Skipping.")
 
     def handle_tree_click(self, event):
         """
         Handles click events on the treeview.
-
-        A click on the checkbox toggles the check state.
-        A click on the text expands/collapses a directory.
-
-        Args:
-            event: The tkinter event object.
+        A click on the checkbox toggles the check state, unless the item is ignored.
         """
         item_id = self.tree.identify_row(event.y)
         if not item_id:
             return
+
+        values = self.tree.item(item_id, "values")
+        if not values or values[1] == "ignored":
+            return # Do nothing for ignored items
+
         try:
             bbox = self.tree.bbox(item_id, "text")
         except Exception:
@@ -122,19 +125,15 @@ class TreeViewManager:
         if bbox[0] <= event.x < bbox[0] + checkbox_width:
             self.toggle_check_state(item_id)
         elif bbox[0] + checkbox_width <= event.x < bbox[0] + text_width:
-            values = self.tree.item(item_id, "values")
-            if values and os.path.isdir(values[0]):
+            if os.path.isdir(values[0]):
                 self.tree.item(item_id, open=not self.tree.item(item_id, "open"))
 
     def toggle_check_state(self, item_id):
         """
         Toggles the check state of a treeview item.
-
-        Args:
-            item_id (str): The ID of the treeview item.
         """
         values = self.tree.item(item_id, "values")
-        if not values:
+        if not values or values[1] == "ignored":
             return
         new_state = "unchecked" if values[1] == "checked" else "checked"
         self.update_check_state(item_id, new_state)
@@ -142,13 +141,12 @@ class TreeViewManager:
     def update_check_state(self, item_id, state):
         """
         Updates the check state of a treeview item and its children.
-
-        Args:
-            item_id (str): The ID of the treeview item.
-            state (str): The new state ('checked' or 'unchecked').
         """
+        values = self.tree.item(item_id, "values")
+        if not values or values[1] == "ignored":
+            return
+
         current_text = self.tree.item(item_id, "text")
-        
         base_text, _, details = current_text.partition('  [')
         if details:
             details = '  [' + details
@@ -159,16 +157,13 @@ class TreeViewManager:
         emoji = CHECKED_EMOJI if state == "checked" else UNCHECKED_EMOJI
         new_text = f" {emoji} {item_name}{details}"
         
-        self.tree.item(item_id, text=new_text, values=[self.tree.item(item_id, "values")[0], state])
+        self.tree.item(item_id, text=new_text, values=[values[0], state])
         for child_id in self.tree.get_children(item_id):
             self.update_check_state(child_id, state)
 
     def get_checked_files(self):
         """
         Recursively gets a list of all checked files in the treeview.
-
-        Returns:
-            list: A list of paths to the checked files.
         """
         checked_files = []
         def _recurse_tree(item_id):
@@ -187,21 +182,21 @@ class TreeViewManager:
         return checked_files
 
     def check_all(self):
-        """Checks all items in the treeview."""
+        """Checks all non-ignored items in the treeview."""
         for item_id in self.tree.get_children():
             self.update_check_state(item_id, "checked")
 
     def uncheck_all(self):
-        """Unchecks all items in the treeview."""
+        """Unchecks all non-ignored items in the treeview."""
         for item_id in self.tree.get_children():
             self.update_check_state(item_id, "unchecked")
 
     def check_selected(self):
-        """Checks the currently selected items in the treeview."""
+        """Checks the currently selected non-ignored items in the treeview."""
         for item_id in self.tree.selection():
             self.update_check_state(item_id, "checked")
 
     def uncheck_selected(self):
-        """Unchecks the currently selected items in the treeview."""
+        """Unchecks the currently selected non-ignored items in the treeview."""
         for item_id in self.tree.selection():
             self.update_check_state(item_id, "unchecked")

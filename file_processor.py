@@ -31,13 +31,12 @@ def get_all_files(directory):
             all_files.append(os.path.join(root, name))
     return all_files
 
-# In file_processor.py, function _is_binary_file
 def _is_binary_file(filepath, chunk_size=1024):
     """Heuristically check if a file is binary by looking for null bytes."""
     try:
         with open(filepath, 'rb') as f:
             return b'\0' in f.read(chunk_size)
-    except (IOError, PermissionError): # More specific exception handling
+    except (IOError, PermissionError):
         return True
 
 def _get_line_count(filepath):
@@ -53,12 +52,6 @@ def _get_line_count(filepath):
 def get_language_identifier(file_path):
     """
     Gets the language identifier for a file path.
-
-    Args:
-        file_path (str): The path to the file.
-
-    Returns:
-        str: The language identifier (e.g., 'python', 'javascript').
     """
     filename = os.path.basename(file_path)
     _, ext = os.path.splitext(filename)
@@ -68,71 +61,88 @@ def get_language_identifier(file_path):
         return LANGUAGE_MAP[ext.lower()]
     return 'text'
 
-def build_annotated_tree(root_path, files_for_tree, files_for_content):
+def build_annotated_tree(root_path, files_for_tree, files_for_content, is_annotated_mode, ignored_items):
     """
     Builds a string representation of the directory tree with annotations.
-
-    Args:
-        root_path (str): The root path of the directory.
-        files_for_tree (list): A list of all files to include in the tree structure.
-        files_for_content (list): A list of files whose content will be included.
-
-    Returns:
-        str: A string representing the annotated directory tree.
     """
     tree_dict = {}
     base_dir = os.path.dirname(root_path)
-    
     content_set = {os.path.normcase(os.path.abspath(p)) for p in files_for_content}
 
-    all_paths = set(files_for_tree)
-    for p in files_for_content:
-        all_paths.add(p)
-
-    for path in all_paths:
+    for path in files_for_tree:
         relative_path = os.path.relpath(path, base_dir).replace(os.sep, '/')
         parts = relative_path.split('/')
         current_level = tree_dict
         for part in parts:
+            # Stop processing if a part of the path is in the ignored set
+            if part in ignored_items:
+                current_level.setdefault(part, 'IGNORED')
+                break
             current_level = current_level.setdefault(part, {})
+        else:
+            continue
     
     def generate_lines(d, prefix="", current_path=""):
         lines = []
-        items = sorted(d.keys(), key=lambda name: (not d[name], name.lower()))
-        for i, name in enumerate(items):
-            connector = "└── " if i == len(items) - 1 else "├── "
+        items = sorted(d.keys())
+        
+        # Separate items for processing
+        dirs = [item for item in items if isinstance(d[item], dict)]
+        files = [item for item in items if not isinstance(d[item], dict) and d[item] != 'IGNORED']
+        ignored_nodes = [item for item in items if d[item] == 'IGNORED']
+        
+        all_renderable_items = dirs + files + ignored_nodes
+        
+        for i, name in enumerate(all_renderable_items):
+            connector = "└── " if i == len(all_renderable_items) - 1 else "├── "
             
+            if name in ignored_nodes:
+                lines.append(f"{prefix}{connector}{name}  [ignored]")
+                continue
+
+            if name in dirs:
+                lines.append(f"{prefix}{connector}{name}")
+                extension = "    " if i == len(all_renderable_items) - 1 else "│   "
+                new_path = os.path.join(current_path, name)
+                lines.extend(generate_lines(d[name], prefix + extension, new_path))
+                continue
+
+            # Process files
             item_full_path_str = os.path.join(base_dir, current_path, name)
             item_normalized_path = os.path.normcase(os.path.abspath(item_full_path_str))
+            is_content_included = item_normalized_path in content_set
             
-            annotation = ""
-            is_file = not d[name]
-            if is_file:
-                annotations = []
-                # FIX: Corrected the annotation logic to avoid redundant messages.
+            annotations = []
+            if is_annotated_mode:
                 if _is_binary_file(item_normalized_path):
                     annotations.append("binary file")
-                    # If it's binary, it might also be omitted, but "binary file" is more specific.
-                    if item_normalized_path not in content_set:
-                        annotations.append("content omitted")
                 else:
-                    # Handle as a text file
                     line_count = _get_line_count(item_normalized_path)
                     if line_count > 0:
                         annotations.append(f"{line_count} lines")
-                    
-                    if item_normalized_path not in content_set:
-                        annotations.append("content omitted")
-                
-                if annotations:
-                    annotation = f"  [{' | '.join(annotations)}]"
+                if not is_content_included:
+                    annotations.append("content omitted")
+            elif is_content_included: # Standard mode, only annotate included files
+                if _is_binary_file(item_normalized_path):
+                    annotations.append("binary file")
+                else:
+                    line_count = _get_line_count(item_normalized_path)
+                    if line_count > 0:
+                        annotations.append(f"{line_count} lines")
 
-            lines.append(f"{prefix}{connector}{name}{annotation}")
+            annotation_str = f"  [{' | '.join(annotations)}]" if annotations else ""
+            
+            if is_annotated_mode or is_content_included:
+                 lines.append(f"{prefix}{connector}{name}{annotation_str}")
 
-            if d[name]:
-                extension = "    " if i == len(items) - 1 else "│   "
-                new_path = os.path.join(current_path, name)
-                lines.extend(generate_lines(d[name], prefix + extension, new_path))
+        # Add summary for omitted files in standard mode
+        if not is_annotated_mode:
+            omitted_file_count = len(files) - sum(1 for name in files if os.path.normcase(os.path.abspath(os.path.join(base_dir, current_path, name))) in content_set)
+            if omitted_file_count > 0:
+                plural = "s" if omitted_file_count > 1 else ""
+                connector = "└── "
+                lines.append(f"{prefix}{connector}[{omitted_file_count} other file{plural} omitted]")
+
         return lines
     
     root_folder_name = os.path.basename(root_path)
@@ -141,17 +151,16 @@ def build_annotated_tree(root_path, files_for_tree, files_for_content):
     return "\n".join(tree_lines)
 
 
-def generate_text_content(root_path, files_for_tree, files_for_content, log_callback, success_callback, final_callback, progress_callback=None):
+def generate_text_content(root_path, files_for_tree, files_for_content, is_annotated_mode, ignored_items, log_callback, success_callback, final_callback, progress_callback=None):
     """
     Generates the final text output with directory structure and file contents.
-    This function is designed to be run in a separate thread.
     """
     try:
         final_content = []
         base_path_for_relpath = os.path.dirname(root_path)
 
-        log_callback("\n--- Building Annotated Directory Tree ---")
-        tree_structure = build_annotated_tree(root_path, files_for_tree, files_for_content)
+        log_callback("\n--- Building Directory Tree ---")
+        tree_structure = build_annotated_tree(root_path, files_for_tree, files_for_content, is_annotated_mode, ignored_items)
         
         final_content.append("# Codebase Structure and File Contents\n\n")
         final_content.append("## Project Structure\n\n```text\n")
@@ -163,14 +172,12 @@ def generate_text_content(root_path, files_for_tree, files_for_content, log_call
             relative_path = os.path.relpath(file_path, base_path_for_relpath).replace(os.sep, '/')
 
             try:
-                # Perform checks first
                 file_size = os.path.getsize(file_path)
                 if file_size > MAX_FILE_SIZE_BYTES:
                     raise FileTooLargeError(f"File is larger than {MAX_FILE_SIZE_MB}MB")
                 if _is_binary_file(file_path):
                     raise BinaryFileError("File is binary")
 
-                # If checks pass, read the file
                 log_callback(f"Adding content for: {relative_path}")
                 language = get_language_identifier(file_path)
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
