@@ -43,11 +43,14 @@ def get_language_identifier(file_path):
         return LANGUAGE_MAP[ext.lower()]
     return 'text'
 
-def scan_directory(path, ignored_items):
+def scan_directory(path, ignored_items, cancel_event=None):
     """
     Scans a directory recursively and builds a data structure for the treeview,
-    including line counts for files.
+    including line counts for files. Can be cancelled.
     """
+    if cancel_event and cancel_event.is_set():
+        return None
+
     item_path = os.path.abspath(path)
     item_name = os.path.basename(item_path)
     is_ignored = item_name in ignored_items
@@ -86,9 +89,13 @@ def scan_directory(path, ignored_items):
     try:
         items = sorted(os.listdir(item_path), key=lambda x: (not os.path.isdir(os.path.join(item_path, x)), x.lower()))
         for name in items:
-            child_node = scan_directory(os.path.join(item_path, name), ignored_items)
+            if cancel_event and cancel_event.is_set():
+                return None
+            child_node = scan_directory(os.path.join(item_path, name), ignored_items, cancel_event)
             if child_node:
                 node['children'].append(child_node)
+            elif cancel_event and cancel_event.is_set():
+                return None
     except (PermissionError, FileNotFoundError):
         pass
     return node
@@ -326,8 +333,9 @@ def generate_text_content(root_path, files_for_tree, files_for_content, is_annot
                 
                 final_content.append("---\n\n")
 
-        update_status("Generation complete!")
-        success_callback("".join(final_content), file_details_map)
+        if not (cancel_event and cancel_event.is_set()):
+            update_status("Generation complete!")
+            success_callback("".join(final_content), file_details_map)
 
     except Exception as e:
         update_status("An unexpected error occurred.")

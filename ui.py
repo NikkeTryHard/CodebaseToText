@@ -95,9 +95,19 @@ class UI:
         )
         self.include_all_toggle.pack(fill=tk.X, pady=(0, 5))
 
-        self.run_button = ttk.Button(action_frame, text="Generate Text", command=self.callbacks['start_conversion'], style="Accent.TButton", state='disabled')
-        self.run_button.pack(fill=tk.X, ipady=5, pady=(5,0))
-        
+        # --- Button Container ---
+        button_container = ttk.Frame(action_frame)
+        button_container.pack(fill=tk.X, pady=(5, 0))
+        button_container.grid_columnconfigure(0, weight=1)
+        button_container.grid_columnconfigure(1, weight=1)
+
+        self.generate_button = ttk.Button(button_container, text="Generate Text", command=self.callbacks['start_conversion'], style="Accent.TButton", state='disabled')
+        self.generate_button.grid(row=0, column=0, sticky="ew", padx=(0, 2), ipady=5)
+
+        self.cancel_button = ttk.Button(button_container, text="Cancel", command=self.callbacks['cancel_operation'])
+        self.cancel_button.grid(row=0, column=1, sticky="ew", padx=(2, 0), ipady=5)
+        self.cancel_button.grid_remove() # Hide cancel button initially
+
         self.status_label = ttk.Label(action_frame, text="", anchor="center")
         self.status_label.pack(fill=tk.X, pady=(5,0))
 
