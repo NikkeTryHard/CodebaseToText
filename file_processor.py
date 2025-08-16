@@ -45,24 +45,40 @@ def get_language_identifier(file_path):
 
 def scan_directory(path, ignored_items):
     """
-    Scans a directory recursively and builds a data structure for the treeview.
+    Scans a directory recursively and builds a data structure for the treeview,
+    including line counts for files.
     """
     item_path = os.path.abspath(path)
     item_name = os.path.basename(item_path)
     is_ignored = item_name in ignored_items
 
+    # Handle files
     if os.path.isfile(item_path):
-        return {
+        file_node = {
             'path': item_path, 'name': item_name, 'is_dir': False,
-            'is_ignored': is_ignored, 'children': []
+            'is_ignored': is_ignored, 'children': [], 'line_count': None, 'error': None
         }
+        if not is_ignored:
+            try:
+                if os.path.getsize(item_path) > MAX_FILE_SIZE_BYTES:
+                    raise FileTooLargeError(f"> {MAX_FILE_SIZE_MB}MB")
+                if _is_binary_file(item_path):
+                    raise BinaryFileError("binary")
+                
+                with open(item_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    file_node['line_count'] = sum(1 for _ in f)
+            except (OSError, FileProcessingError) as e:
+                file_node['error'] = str(e)
+        return file_node
 
+    # Handle ignored directories
     if is_ignored:
         return {
             'path': item_path, 'name': item_name, 'is_dir': True,
             'is_ignored': True, 'children': []
         }
 
+    # Handle regular directories
     node = {
         'path': item_path, 'name': item_name, 'is_dir': True,
         'is_ignored': False, 'children': []
@@ -163,7 +179,15 @@ def build_annotated_tree(root_path, files_for_tree, files_for_content, is_annota
                 continue
 
             if name in dirs:
-                lines.append(f"{prefix}{connector}{name}")
+                item_full_path_str = os.path.join(base_dir, current_path, name)
+                item_normalized_path = os.path.normcase(os.path.abspath(item_full_path_str))
+                details = file_details_map.get(item_normalized_path)
+                
+                line_count_annotation = ""
+                if details and 'line_count' in details:
+                    line_count_annotation = f"  [{details['line_count']} lines]"
+
+                lines.append(f"{prefix}{connector}{name}{line_count_annotation}")
                 new_path = os.path.join(current_path, name)
                 lines.extend(generate_lines(d[name], prefix + extension, new_path))
                 continue
@@ -175,14 +199,19 @@ def build_annotated_tree(root_path, files_for_tree, files_for_content, is_annota
             annotations = []
             details = file_details_map.get(item_normalized_path)
 
-            has_error = details and details.get('error')
-            if has_error:
-                annotations.append(str(details['error']))
+            if details:
+                error = details.get('error')
+                if error:
+                    if isinstance(error, BinaryFileError):
+                        annotations.append("binary file")
+                    elif isinstance(error, FileTooLargeError):
+                        annotations.append(f"file > {MAX_FILE_SIZE_MB}MB")
+                    else:
+                        annotations.append("read error")
+                elif 'line_count' in details and (is_content_included or is_annotated_mode):
+                    annotations.append(f"{details['line_count']} lines")
             
-            if is_content_included and details and 'line_count' in details:
-                annotations.append(f"{details['line_count']} lines")
-            
-            if is_annotated_mode and not is_content_included and not has_error:
+            if is_annotated_mode and not is_content_included and not (details and details.get('error')):
                 annotations.append("content omitted")
 
             annotation_str = f"  [{' | '.join(annotations)}]" if annotations else ""
@@ -191,13 +220,18 @@ def build_annotated_tree(root_path, files_for_tree, files_for_content, is_annota
         return lines
     
     root_folder_name = os.path.basename(root_path)
-    tree_lines = [root_folder_name]
+    root_details = file_details_map.get(os.path.normcase(os.path.abspath(root_path)))
+    root_line_count_annotation = ""
+    if root_details and 'line_count' in root_details:
+        root_line_count_annotation = f"  [{root_details['line_count']} lines]"
+
+    tree_lines = [f"{root_folder_name}{root_line_count_annotation}"]
     tree_lines.extend(generate_lines(tree_dict.get(root_folder_name, {}), "", root_folder_name))
     return "\n".join(tree_lines)
 
 
 # --- Main Generation Function (Optimized) ---
-def generate_text_content(root_path, files_for_tree, files_for_content, is_annotated_mode, ignored_items, item_states, log_callback, success_callback, final_callback, progress_callback=None, status_callback=None):
+def generate_text_content(root_path, files_for_tree, files_for_content, is_annotated_mode, ignored_items, item_states, log_callback, success_callback, final_callback, progress_callback=None, status_callback=None, cancel_event=None):
     """
     Generates the final text output. Optimized to read each file only once.
     """
@@ -209,33 +243,54 @@ def generate_text_content(root_path, files_for_tree, files_for_content, is_annot
         final_content = []
         base_path_for_relpath = os.path.dirname(root_path)
         
-        total_files = len(files_for_content)
-        update_status(f"Analyzing {total_files} selected files...")
-        log_callback("\n--- Reading and analyzing selected files ---")
-        processed_files = []
+        all_files_in_tree = [f for f in files_for_tree if os.path.isfile(f)]
+        total_files = len(all_files_in_tree)
         
-        for i, file_path in enumerate(sorted(files_for_content)):
-            update_status(f"Reading file {i+1}/{total_files}: {os.path.basename(file_path)}")
+        update_status(f"Analyzing {total_files} files...")
+        log_callback("\n--- Reading and analyzing all files for details ---")
+        file_details_map = {}
+        
+        for i, file_path in enumerate(sorted(all_files_in_tree)):
+            if cancel_event and cancel_event.is_set():
+                log_callback("Generation cancelled during file analysis.")
+                update_status("Cancelled.")
+                return
+
+            file_name = os.path.basename(file_path)
+            update_status(f"Analyzing file {i+1}/{total_files}: {file_name}")
+            
+            norm_path = os.path.normcase(os.path.abspath(file_path))
             details = {'path': file_path, 'content': None, 'error': None}
+            
             try:
                 if os.path.getsize(file_path) > MAX_FILE_SIZE_BYTES:
                     raise FileTooLargeError(f"File > {MAX_FILE_SIZE_MB}MB")
                 if _is_binary_file(file_path):
                     raise BinaryFileError("Binary file")
 
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                details['content'] = content
-                details['line_count'] = content.count('\n') + 1
-
+                if norm_path in {os.path.normcase(os.path.abspath(p)) for p in files_for_content}:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                    details['content'] = content
+                    details['line_count'] = content.count('\n') + 1
+                    log_callback(f"  - Success: Read '{file_name}' ({details['line_count']} lines)")
+                else:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        line_count = sum(1 for _ in f)
+                    details['line_count'] = line_count
+                    
             except (OSError, FileProcessingError) as e:
                 details['error'] = e
+                log_callback(f"  - Skipped: '{file_name}' ({e})")
             
-            processed_files.append(details)
+            file_details_map[norm_path] = details
             if progress_callback:
-                progress_callback()
-        
-        file_details_map = {os.path.normcase(os.path.abspath(f['path'])): f for f in processed_files}
+                progress_callback(i + 1, total_files)
+
+        if cancel_event and cancel_event.is_set():
+            log_callback("Generation cancelled before tree building.")
+            update_status("Cancelled.")
+            return
 
         update_status("Building directory tree...")
         log_callback("\n--- Building Directory Tree ---")
@@ -246,12 +301,21 @@ def generate_text_content(root_path, files_for_tree, files_for_content, is_annot
         final_content.append(tree_structure)
         final_content.append("\n```\n\n---\n\n## File Contents\n\n")
 
+        if cancel_event and cancel_event.is_set():
+            log_callback("Generation cancelled before formatting output.")
+            update_status("Cancelled.")
+            return
+
         update_status("Formatting final output...")
         log_callback("\n--- Formatting final output ---")
-        for details in processed_files:
-            # *** CHANGE IS HERE ***
-            # Only generate a content section if the file was successfully read.
-            if not details.get('error') and details.get('content') is not None:
+        for file_path in sorted(files_for_content):
+            if cancel_event and cancel_event.is_set():
+                log_callback("Generation cancelled during output formatting.")
+                update_status("Cancelled.")
+                return
+
+            details = file_details_map.get(os.path.normcase(os.path.abspath(file_path)))
+            if details and not details.get('error') and details.get('content') is not None:
                 relative_path = os.path.relpath(details['path'], base_path_for_relpath).replace(os.sep, '/')
                 final_content.append(f"### `{relative_path}`\n\n")
                 
@@ -263,7 +327,7 @@ def generate_text_content(root_path, files_for_tree, files_for_content, is_annot
                 final_content.append("---\n\n")
 
         update_status("Generation complete!")
-        success_callback("".join(final_content))
+        success_callback("".join(final_content), file_details_map)
 
     except Exception as e:
         update_status("An unexpected error occurred.")

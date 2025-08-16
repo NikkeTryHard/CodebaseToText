@@ -2,7 +2,8 @@
 import os
 import tkinter.font as tkfont
 from tkinter import ttk
-from constants import CHECKED_EMOJI, UNCHECKED_EMOJI
+from constants import CHECKED_EMOJI, UNCHECKED_EMOJI, MAX_FILE_SIZE_MB
+from file_processor import BinaryFileError, FileTooLargeError
 
 class TreeViewManager:
     """
@@ -41,7 +42,8 @@ class TreeViewManager:
             return
         
         root_node = self.tree.insert("", "end", text=f" {CHECKED_EMOJI} {root_node_data['name']}", open=True, values=[root_node_data['path'], "checked"])
-        self._populate_recursive(root_node_data['children'], root_node)
+        if root_node_data.get('children'):
+            self._populate_recursive(root_node_data['children'], root_node)
 
     def _populate_recursive(self, children_data, parent_node):
         for item_data in children_data:
@@ -50,13 +52,22 @@ class TreeViewManager:
             is_ignored = item_data['is_ignored']
             is_dir = item_data['is_dir']
 
+            annotation = ""
+            if not is_dir and not is_ignored:
+                line_count = item_data.get('line_count')
+                error = item_data.get('error')
+                if error:
+                    annotation = f"  [{error}]"
+                elif line_count is not None:
+                    annotation = f"  [{line_count} lines]"
+
             if is_ignored:
                 node_text = f" {UNCHECKED_EMOJI} {name}"
                 self.tree.insert(parent_node, "end", text=node_text, open=False, values=[path, "ignored"], tags=('ignored',))
             else:
-                node_text = f" {CHECKED_EMOJI} {name}"
+                node_text = f" {CHECKED_EMOJI} {name}{annotation}"
                 node = self.tree.insert(parent_node, "end", text=node_text, open=False, values=[path, "checked"])
-                if is_dir and item_data['children']:
+                if is_dir and item_data.get('children'):
                     self._populate_recursive(item_data['children'], node)
 
     def handle_tree_click(self, event):
@@ -76,7 +87,8 @@ class TreeViewManager:
             return
             
         item_text = self.tree.item(item_id, "text")
-        main_text = item_text.split('[')[0]
+        main_text, _, annotation = item_text.partition('  [')
+        
         checkbox_area_text = f" {CHECKED_EMOJI} "
         checkbox_width = self.tree_font.measure(checkbox_area_text)
         text_width = self.tree_font.measure(main_text)
@@ -100,16 +112,17 @@ class TreeViewManager:
             return
 
         current_text = self.tree.item(item_id, "text")
-        base_text, _, details = current_text.partition('  [')
-        if details:
-            details = '  [' + details
-
+        base_text, _, annotation_part = current_text.partition('  [')
+        
         text_parts = base_text.strip().split(' ', 1)
         item_name = text_parts[1] if len(text_parts) > 1 else ""
         
         emoji = CHECKED_EMOJI if state == "checked" else UNCHECKED_EMOJI
-        new_text = f" {emoji} {item_name}{details}"
+        new_text = f" {emoji} {item_name}"
         
+        if annotation_part:
+            new_text += f"  [{annotation_part}"
+
         self.tree.item(item_id, text=new_text, values=[values[0], state])
         for child_id in self.tree.get_children(item_id):
             self.update_check_state(child_id, state)
@@ -128,14 +141,11 @@ class TreeViewManager:
                     _recurse_tree(child_id)
         root_items = self.tree.get_children()
         if root_items:
-            _recurse_tree(root_items[0])
+            for item in root_items:
+                _recurse_tree(item)
         return checked_files
 
     def get_all_item_states(self):
-        """
-        Returns a dictionary mapping the normalized absolute path of every
-        item in the tree to its state ('checked', 'unchecked', 'ignored').
-        """
         states = {}
         def _recurse(item_id):
             values = self.tree.item(item_id, "values")
@@ -143,7 +153,6 @@ class TreeViewManager:
                 return
             
             path, state = values[0], values[1]
-            # Normalize path for consistent lookups
             norm_path = os.path.normcase(os.path.abspath(path))
             states[norm_path] = state
             
@@ -152,8 +161,52 @@ class TreeViewManager:
 
         root_items = self.tree.get_children()
         if root_items:
-            _recurse(root_items[0])
+            for item in root_items:
+                _recurse(item)
         return states
+
+    def update_tree_with_details(self, file_details_map):
+        """
+        Recursively updates the treeview items with details like line count or errors.
+        This is now mostly redundant as details are shown on scan, but can be used for updates.
+        """
+        def _recurse_update(item_id):
+            values = self.tree.item(item_id, "values")
+            if not values:
+                return
+
+            path, state = values[0], values[1]
+            if state != "ignored" and os.path.isfile(path):
+                norm_path = os.path.normcase(os.path.abspath(path))
+                details = file_details_map.get(norm_path)
+
+                if details:
+                    current_text = self.tree.item(item_id, "text")
+                    base_text, _, _ = current_text.partition('  [')
+                    
+                    annotation = ""
+                    error = details.get('error')
+                    if error:
+                        if isinstance(error, BinaryFileError):
+                            annotation = "binary file"
+                        elif isinstance(error, FileTooLargeError):
+                            annotation = f"file > {MAX_FILE_SIZE_MB}MB"
+                        else:
+                            annotation = "read error"
+                    elif 'line_count' in details:
+                        annotation = f"{details['line_count']} lines"
+
+                    if annotation:
+                        new_text = f"{base_text.strip()}  [{annotation}]"
+                        self.tree.item(item_id, text=new_text)
+
+            for child_id in self.tree.get_children(item_id):
+                _recurse_update(child_id)
+
+        root_items = self.tree.get_children()
+        if root_items:
+            for item in root_items:
+                _recurse_update(item)
 
     def check_all(self):
         for item_id in self.tree.get_children():

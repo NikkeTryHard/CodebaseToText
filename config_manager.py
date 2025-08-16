@@ -7,32 +7,41 @@ class ConfigManager:
     def __init__(self, config_file='config.ini'):
         self.config_file = config_file
         self.config = configparser.ConfigParser()
-        
-        # Safer Initialization:
-        # 1. Set the default values in memory first.
-        self._set_defaults()
-        
-        # 2. If the config file exists, read it to override the defaults.
-        if os.path.exists(config_file):
-            try:
-                self.config.read(config_file)
-            except configparser.Error:
-                # If the file is malformed, we'll proceed with defaults
-                # and overwrite the bad file on the next save.
-                print(f"Warning: Could not parse '{config_file}'. Using default settings.")
-        else:
-            # 3. If the file doesn't exist, save the defaults to create it.
-            self.save_config()
 
-    def _set_defaults(self):
-        """Sets the default configuration values in the config object."""
-        self.config['Settings'] = {
-            'width': '800',
-            'height': '700',
-            'last_folder': '',
-            'ignore_list': '.log, .tmp, venv',
-            'theme': 'dark'
+        # Define default settings
+        defaults = {
+            'Settings': {
+                'width': '800',
+                'height': '700',
+                'last_folder': '',
+                'ignore_list': '.log, .tmp, venv',
+                'theme': 'dark'
+            }
         }
+
+        # Attempt to read the existing config file.
+        # If it's malformed or doesn't exist, we'll proceed with defaults.
+        try:
+            if os.path.exists(config_file):
+                self.config.read(config_file)
+        except configparser.Error:
+            print(f"Warning: Could not parse '{config_file}'. A new one will be created with defaults.")
+
+        # Check for missing sections and keys and apply defaults if necessary
+        config_was_modified = False
+        for section, keys in defaults.items():
+            if not self.config.has_section(section):
+                self.config.add_section(section)
+                config_was_modified = True
+            for key, value in keys.items():
+                if not self.config.has_option(section, key):
+                    self.config.set(section, key, value)
+                    config_was_modified = True
+        
+        # If the file was created or updated with default values, save it.
+        # This ensures that a complete config file is always present.
+        if config_was_modified:
+            self.save_config()
 
     def get_setting(self, section, key, fallback=None):
         return self.config.get(section, key, fallback=fallback)

@@ -1,6 +1,11 @@
 # output_window.py
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import ttk, scrolledtext, messagebox
+import os
+
+# Set a character limit to prevent the app from freezing on huge outputs
+# 5 million characters is roughly 5 MB, a safe limit for Tkinter.
+OUTPUT_CHARACTER_LIMIT = 5_000_000
 
 def _copy_to_clipboard(root, text_widget, status_label, log_callback):
     """Copies the content of the text widget to the system clipboard."""
@@ -15,7 +20,6 @@ def _copy_to_clipboard(root, text_widget, status_label, log_callback):
         log_callback("Could not copy to clipboard (maybe empty).")
         status_label.config(text="Nothing to copy.", foreground="red")
         root.after(2000, lambda: status_label.config(text="Ready.", foreground=""))
-
 
 def show_output_window(parent_root, content, log_callback):
     """Creates and displays the output window."""
@@ -50,7 +54,34 @@ def show_output_window(parent_root, content, log_callback):
         pady=10
     )
     content_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-    content_text.insert('1.0', content)
+
+    # <<< FIX: Handle potentially huge content to prevent freezing
+    if len(content) > OUTPUT_CHARACTER_LIMIT:
+        try:
+            desktop = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
+        except:
+            desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+        
+        output_path = os.path.join(desktop, "CodebaseToText_Output.txt")
+        
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            message = (f"The output is too large to display safely ({len(content):,} characters).\n\n"
+                       f"It has been automatically saved to your Desktop as:\n\n"
+                       f"{output_path}")
+            content_text.insert('1.0', message)
+            log_callback(f"Output too large, saved to {output_path}")
+            copy_button.config(state='disabled') # Disable copy button as content is not in widget
+        except Exception as e:
+            message = f"The output is too large to display, and an error occurred while saving it to the desktop:\n\n{e}"
+            content_text.insert('1.0', message)
+            log_callback(f"Error saving large output file: {e}")
+            copy_button.config(state='disabled')
+    else:
+        content_text.insert('1.0', content)
+    
     content_text.config(state='disabled')
     
     # --- Bind Command After Widget Creation ---

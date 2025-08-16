@@ -42,13 +42,17 @@ class DirectoryToTextApp:
         self.ignored_items = self.config.get_ignored_set()
         self.tree_manager = TreeViewManager(self.ui.tree, self.root, self.log_message, self.ignored_items)
         self._setup_event_bindings()
+
+        self.generation_thread = None
+        self.cancel_generation = threading.Event()
+
         if self.root_dir.get():
             self._load_folder(self.root_dir.get())
 
     def _setup_window(self):
         width = self.config.get_setting('Settings', 'width', '800')
         height = self.config.get_setting('Settings', 'height', '700')
-        self.root.title("CodebaseToText v6.8") 
+        self.root.title("CodebaseToText v6.9") 
         self.root.geometry(f"{width}x{height}")
         theme = self.config.get_setting('Settings', 'theme', 'dark')
         if theme not in ['dark', 'light']:
@@ -72,7 +76,7 @@ class DirectoryToTextApp:
         self.log_message(f"Scanning folder: {folder_path}")
         
         self.tree_manager.clear_tree()
-        self.ui.tree.insert("", "end", text="  Scanning directory, please wait...")
+        self.ui.tree.insert("", "end", text="  Scanning and analyzing files, please wait...")
         self.ui.run_button.config(state='disabled')
         self.ui.browse_button.config(state='disabled')
         
@@ -146,29 +150,41 @@ class DirectoryToTextApp:
             return
         
         self.log_message("Starting generation...")
-        self.ui.run_button.config(state='disabled', text="Processing...")
+        self.ui.run_button.config(state='normal', text="Cancel", command=self.cancel_conversion)
         self.update_status("Starting...")
-        self.ui.progress_bar['maximum'] = len(files_for_content)
+        
         self.ui.progress_bar['value'] = 0
+        self.cancel_generation.clear()
 
-        thread = threading.Thread(
+        self.generation_thread = threading.Thread(
             target=generate_text_content,
-            args=(root_path, files_for_tree, files_for_content, is_annotated_mode, self.ignored_items, item_states, self.log_message, self.display_results, self.enable_run_button, self.update_progress, self.update_status),
+            args=(root_path, files_for_tree, files_for_content, is_annotated_mode, self.ignored_items, item_states, self.log_message, self.display_results, self.enable_run_button, self.update_progress, self.update_status, self.cancel_generation),
             daemon=True
         )
-        thread.start()
+        self.generation_thread.start()
 
-    def display_results(self, content):
-        self.log_message("Generation complete. Opening output window.")
+    def cancel_conversion(self):
+        if self.generation_thread and self.generation_thread.is_alive():
+            self.log_message("Cancellation requested by user.")
+            self.update_status("Cancelling...")
+            self.cancel_generation.set()
+
+    def display_results(self, content, file_details_map):
+        self.log_message("Generation complete. Updating UI and opening output window.")
+        self.tree_manager.update_tree_with_details(file_details_map)
         show_output_window(self.root, content, self.log_message)
 
     def enable_run_button(self):
-        self.ui.run_button.config(state='normal', text="Generate Text")
+        self.ui.run_button.config(state='normal', text="Generate Text", command=self.start_conversion_thread)
         self.ui.progress_bar['value'] = 0
-        self.root.after(2000, lambda: self.update_status(""))
+        
+        status_message = "Generation cancelled." if self.cancel_generation.is_set() else ""
+        self.update_status(status_message)
+        self.root.after(3000, lambda: self.update_status(""))
 
-    def update_progress(self):
-        self.ui.progress_bar['value'] += 1
+    def update_progress(self, current, total):
+        self.ui.progress_bar['maximum'] = total
+        self.ui.progress_bar['value'] = current
         
     def update_status(self, message):
         """Thread-safe method to update the status label."""
@@ -181,7 +197,7 @@ class DirectoryToTextApp:
     def show_about(self):
         messagebox.showinfo(
             "About CodebaseToText",
-            "Version: 6.8\n\n"
+            "Version: 6.9\n\n"
             "This application helps you package a codebase into a single markdown file for use with Large Language Models."
         )
 
