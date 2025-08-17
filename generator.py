@@ -111,7 +111,8 @@ def generate_text_content_fast(root_path, scanned_tree_data, files_for_content, 
     This function is now almost instantaneous.
     """
     def update_status(msg):
-        if status_callback: status_callback(msg)
+        if status_callback:
+            status_callback(msg)
 
     try:
         final_content = []
@@ -119,13 +120,15 @@ def generate_text_content_fast(root_path, scanned_tree_data, files_for_content, 
 
         # 1. Pre-calculation Step (very fast single pass)
         update_status("Analyzing selections...")
-        if cancel_event and cancel_event.is_set(): return
+        if cancel_event and cancel_event.is_set():
+            return
         content_set = {os.path.normcase(os.path.abspath(p)) for p in files_for_content}
         _mark_visible_nodes(scanned_tree_data, content_set)
 
         # 2. Build the Project Structure tree string (now lightning fast)
         update_status("Building directory tree...")
-        if cancel_event and cancel_event.is_set(): return
+        if cancel_event and cancel_event.is_set():
+            return
         
         tree_header = f"{scanned_tree_data['name']}"
         tree_lines = _generate_tree_lines_from_node(scanned_tree_data, is_annotated_mode)
@@ -137,7 +140,8 @@ def generate_text_content_fast(root_path, scanned_tree_data, files_for_content, 
 
         # 3. Flatten the tree for instant file content lookups
         update_status("Preparing file content...")
-        if cancel_event and cancel_event.is_set(): return
+        if cancel_event and cancel_event.is_set():
+            return
         file_details_map = _flatten_tree_to_map(scanned_tree_data)
 
         # 4. Append file contents (very fast)
@@ -147,7 +151,8 @@ def generate_text_content_fast(root_path, scanned_tree_data, files_for_content, 
         last_progress_update = time.time()
 
         for i, file_path in enumerate(content_files):
-            if cancel_event and cancel_event.is_set(): return
+            if cancel_event and cancel_event.is_set():
+                return
             
             norm_path = os.path.normcase(os.path.abspath(file_path))
             details = file_details_map.get(norm_path)
