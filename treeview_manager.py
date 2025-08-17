@@ -3,7 +3,7 @@ import os
 import tkinter.font as tkfont
 from tkinter import ttk
 from constants import CHECKED_EMOJI, UNCHECKED_EMOJI, MAX_FILE_SIZE_MB
-from file_processor import BinaryFileError, FileTooLargeError
+from file_processor_utils import BinaryFileError, FileTooLargeError
 
 class TreeViewManager:
     """

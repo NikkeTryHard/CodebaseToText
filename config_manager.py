@@ -8,43 +8,34 @@ class ConfigManager:
         self.config_file = config_file
         self.config = configparser.ConfigParser()
 
-        # Define default settings
-        defaults = {
+        # These defaults are now used as fallbacks if a key is missing,
+        # rather than being written to the file automatically.
+        self.defaults = {
             'Settings': {
                 'width': '800',
                 'height': '700',
                 'last_folder': '',
-                'ignore_list': '.log, .tmp, venv',
+                'ignore_list': '', # The default is now an empty string.
                 'theme': 'dark'
             }
         }
-
-        # Attempt to read the existing config file.
-        # If it's malformed or doesn't exist, we'll proceed with defaults.
-        try:
-            if os.path.exists(config_file):
-                self.config.read(config_file)
-        except configparser.Error:
-            print(f"Warning: Could not parse '{config_file}'. A new one will be created with defaults.")
-
-        # Check for missing sections and keys and apply defaults if necessary
-        config_was_modified = False
-        for section, keys in defaults.items():
-            if not self.config.has_section(section):
-                self.config.add_section(section)
-                config_was_modified = True
-            for key, value in keys.items():
-                if not self.config.has_option(section, key):
-                    self.config.set(section, key, value)
-                    config_was_modified = True
         
-        # If the file was created or updated with default values, save it.
-        # This ensures that a complete config file is always present.
-        if config_was_modified:
+        # We only create a new config file if it's completely missing.
+        # We will no longer "repair" an existing file on startup.
+        if not os.path.exists(self.config_file):
+            print(f"Config file '{self.config_file}' not found. Creating with default values.")
+            self.config['Settings'] = self.defaults['Settings']
             self.save_config()
+        else:
+            self.config.read(self.config_file)
 
-    def get_setting(self, section, key, fallback=None):
-        return self.config.get(section, key, fallback=fallback)
+    def get_setting(self, section, key):
+        """
+        Gets a setting from the config file. If the setting is not found,
+        it falls back to the value defined in the self.defaults dictionary.
+        """
+        fallback_value = self.defaults.get(section, {}).get(key)
+        return self.config.get(section, key, fallback=fallback_value)
 
     def set_setting(self, section, key, value):
         if not self.config.has_section(section):
@@ -60,7 +51,8 @@ class ConfigManager:
             print(f"Error: Could not write to config file at '{self.config_file}'.")
 
     def get_ignored_set(self):
-        """Returns a set of items to ignore, combining defaults with user config."""
-        user_list_str = self.get_setting('Settings', 'ignore_list', '')
+        """Returns a set of items to ignore from the config file and constants."""
+        user_list_str = self.get_setting('Settings', 'ignore_list')
         user_list = {item.strip() for item in user_list_str.split(',') if item.strip()}
+        # Combine the hardcoded set (which should be empty) with the user's set.
         return DEFAULT_IGNORED_ITEMS.union(user_list)

@@ -1,6 +1,6 @@
 # output_window.py
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+from tkinter import ttk, scrolledtext
 import os
 
 # Set a character limit to prevent the app from freezing on huge outputs
@@ -55,11 +55,11 @@ def show_output_window(parent_root, content, log_callback):
     )
     content_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
-    # <<< FIX: Handle potentially huge content to prevent freezing
     if len(content) > OUTPUT_CHARACTER_LIMIT:
         try:
+            # FIX (Ruff E722): Use specific exception handling instead of bare 'except'
             desktop = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
-        except:
+        except KeyError:
             desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
         
         output_path = os.path.join(desktop, "CodebaseToText_Output.txt")
@@ -73,7 +73,7 @@ def show_output_window(parent_root, content, log_callback):
                        f"{output_path}")
             content_text.insert('1.0', message)
             log_callback(f"Output too large, saved to {output_path}")
-            copy_button.config(state='disabled') # Disable copy button as content is not in widget
+            copy_button.config(state='disabled')
         except Exception as e:
             message = f"The output is too large to display, and an error occurred while saving it to the desktop:\n\n{e}"
             content_text.insert('1.0', message)
@@ -84,10 +84,11 @@ def show_output_window(parent_root, content, log_callback):
     
     content_text.config(state='disabled')
     
-    # --- Bind Command After Widget Creation ---
     copy_button['command'] = lambda: _copy_to_clipboard(parent_root, content_text, status_label, log_callback)
 
     # --- Window Behavior ---
+    # FIX: Make the window non-modal to prevent the main app from freezing.
+    # The main window will remain interactive.
     output_win.transient(parent_root)
-    output_win.grab_set()
-    parent_root.wait_window(output_win)
+    # REMOVED: output_win.grab_set()
+    # REMOVED: parent_root.wait_window(output_win)

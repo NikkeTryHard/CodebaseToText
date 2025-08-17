@@ -11,11 +11,7 @@ MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 # --- Default Ignored Items ---
 # This set contains common directories and files to ignore during processing.
 # It can be extended via the config.ini file.
-DEFAULT_IGNORED_ITEMS = {
-    '__pycache__', '.vscode', '.idea', '.DS_Store',
-    'build', '.env', '.git', '.gitignore', '.gitattributes', 'dist'
-}
-
+DEFAULT_IGNORED_ITEMS = set()
 
 # --- File Type Mapping for Syntax Highlighting ---
 LANGUAGE_MAP = {

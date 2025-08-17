@@ -6,10 +6,13 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import threading
 from treeview_manager import TreeViewManager
-from file_processor import generate_text_content, get_all_files, scan_directory
 from output_window import show_output_window
 from config_manager import ConfigManager
 from ui import UI
+from caching import FileDetailCache
+from scanner import scan_directory_fast
+from generator import generate_text_content_fast
+from file_processor_utils import get_all_files
 
 def resource_path(relative_path):
     try:
@@ -23,8 +26,9 @@ class DirectoryToTextApp:
         self.root = root
         self.verbose = verbose
         self.config = ConfigManager()
+        self.file_cache = FileDetailCache()
+        self.root_dir = tk.StringVar(value=self.config.get_setting('Settings', 'last_folder'))
         self._setup_window()
-        self.root_dir = tk.StringVar(value=self.config.get_setting('Settings', 'last_folder', ''))
         self.include_all_var = tk.BooleanVar(value=False)
         callbacks = {
             'select_folder': self.select_folder,
@@ -53,11 +57,11 @@ class DirectoryToTextApp:
             self._load_folder(self.root_dir.get())
 
     def _setup_window(self):
-        width = self.config.get_setting('Settings', 'width', '800')
-        height = self.config.get_setting('Settings', 'height', '700')
+        width = self.config.get_setting('Settings', 'width')
+        height = self.config.get_setting('Settings', 'height')
         self.root.title("CodebaseToText v7.0") 
         self.root.geometry(f"{width}x{height}")
-        theme = self.config.get_setting('Settings', 'theme', 'dark')
+        theme = self.config.get_setting('Settings', 'theme')
         if theme not in ['dark', 'light']:
             theme = 'dark'
         azure_path = resource_path('azure.tcl')
@@ -83,21 +87,21 @@ class DirectoryToTextApp:
         
         self.ui.generate_button.config(state='disabled')
         self.ui.browse_button.config(state='disabled')
-        self.ui.cancel_button.grid() # Show cancel button
+        self.ui.cancel_button.grid()
 
         self.cancel_scan.clear()
         self.scan_thread = threading.Thread(
-            target=self._scan_folder_thread,
+            target=self._scan_folder_thread_fast,
             args=(folder_path, self.cancel_scan),
             daemon=True
         )
         self.scan_thread.start()
 
-    def _scan_folder_thread(self, folder_path, cancel_event):
-        """Worker function to scan directory in the background."""
+    def _scan_folder_thread_fast(self, folder_path, cancel_event):
+        """Worker function to scan directory in the background using the fast, multi-threaded scanner."""
         tree_data = None
         try:
-            tree_data = scan_directory(folder_path, self.ignored_items, cancel_event)
+            tree_data = scan_directory_fast(folder_path, self.ignored_items, self.file_cache, cancel_event)
             if tree_data:
                 self.root.after(0, self._populate_tree_ui, tree_data)
         except Exception as e:
@@ -131,7 +135,7 @@ class DirectoryToTextApp:
         self.root.after(3000, lambda: self.update_status(""))
 
     def select_folder(self):
-        last_folder = self.config.get_setting('Settings', 'last_folder', '')
+        last_folder = self.config.get_setting('Settings', 'last_folder')
         folder_selected = filedialog.askdirectory(initialdir=last_folder if os.path.isdir(last_folder) else None)
         if folder_selected:
             self._load_folder(folder_selected)
@@ -176,8 +180,14 @@ class DirectoryToTextApp:
         self.cancel_generation.clear()
 
         self.generation_thread = threading.Thread(
-            target=generate_text_content,
-            args=(root_path, files_for_tree, files_for_content, is_annotated_mode, self.ignored_items, item_states, self.log_message, self.display_results, self._reset_ui_after_generation, self.update_progress, self.update_status, self.cancel_generation),
+            target=generate_text_content_fast,
+            args=(
+                root_path, files_for_tree, files_for_content, is_annotated_mode, 
+                self.ignored_items, item_states, self.log_message, 
+                self.display_results, self._reset_ui_after_generation, 
+                self.file_cache, self.update_progress, self.update_status, 
+                self.cancel_generation
+            ),
             daemon=True
         )
         self.generation_thread.start()
@@ -239,8 +249,16 @@ class DirectoryToTextApp:
         self.tree_manager.uncheck_all()
 
     def on_closing(self):
+        # FIX: Preserve the ignore_list by getting its current value before setting others.
+        # This ensures it's part of the config object when we save.
+        current_ignore_list = self.config.get_setting('Settings', 'ignore_list')
+        self.config.set_setting('Settings', 'ignore_list', current_ignore_list)
+        
+        # Now, update the settings that change during the session
         self.config.set_setting('Settings', 'width', self.root.winfo_width())
         self.config.set_setting('Settings', 'height', self.root.winfo_height())
         self.config.set_setting('Settings', 'last_folder', self.root_dir.get())
+        
+        # Save everything
         self.config.save_config()
         self.root.destroy()
