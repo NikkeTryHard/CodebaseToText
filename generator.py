@@ -2,7 +2,6 @@
 import os
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-# FIX (Ruff F401): Removed unused imports
 from file_processor_utils import get_language_identifier
 
 def build_annotated_tree(root_path, files_for_tree, files_for_content, is_annotated_mode, ignored_items, item_states, file_details_map):
@@ -123,18 +122,8 @@ def build_annotated_tree(root_path, files_for_tree, files_for_content, is_annota
     tree_lines.extend(generate_lines(tree_dict.get(root_folder_name, {}), "", root_folder_name))
     return "\n".join(tree_lines)
 
-
 def _read_file_content_worker(file_path, cache):
-    """Worker function to read file content, using cache."""
-    cached_data = cache.get(file_path)
-
-    if cached_data and cached_data.get('error'):
-        cached_data['content'] = None
-        return file_path, cached_data
-
-    if cached_data and 'content' in cached_data and cached_data['content'] is not None:
-        return file_path, cached_data
-
+    """Worker function to read file content, used for cache misses."""
     details = {}
     try:
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -146,22 +135,16 @@ def _read_file_content_worker(file_path, cache):
         details['content'] = None
         details['error'] = str(e)
 
-    if cached_data:
-        cached_data.update(details)
-        cache.set(file_path, cached_data)
-    else:
-        cache.set(file_path, details)
-        
+    # Set the result in the cache for this session
+    cache.set(file_path, details)
     return file_path, details
-
 
 def generate_text_content_fast(root_path, files_for_tree, files_for_content, is_annotated_mode, ignored_items, item_states, log_callback, success_callback, final_callback, cache, progress_callback=None, status_callback=None, cancel_event=None):
     """
-    Generates the final text output. Uses a thread pool to read file contents
-    and leverages the cache from the scanning phase.
+    Generates the final text output. Reads files from disk only if they
+    were not pre-loaded into the cache during the scan phase.
     """
     def update_status(msg):
-        # FIX (Ruff E701): Split statement to its own line
         if status_callback:
             status_callback(msg)
 
@@ -170,42 +153,43 @@ def generate_text_content_fast(root_path, files_for_tree, files_for_content, is_
         base_path_for_relpath = os.path.dirname(root_path)
         
         file_details_map = {}
+        # Populate details from cache for all tree files initially
         for file_path in files_for_tree:
             if os.path.isfile(file_path):
                 norm_path = os.path.normcase(os.path.abspath(file_path))
-                file_details_map[norm_path] = cache.get(file_path) or {'path': file_path, 'error': 'Cache miss'}
+                file_details_map[norm_path] = cache.get(file_path) or {'path': file_path}
 
-        files_to_read = sorted(list(set(files_for_content)))
-        total_to_read = len(files_to_read)
-        update_status(f"Reading content for {total_to_read} selected files...")
-        log_callback(f"\n--- Reading content for {total_to_read} files ---")
+        # Identify which files for content are missing from the cache (i.e., content needs to be read)
+        files_to_read = [
+            fp for fp in files_for_content
+            if 'content' not in file_details_map.get(os.path.normcase(os.path.abspath(fp)), {})
+        ]
 
-        with ThreadPoolExecutor() as executor:
-            future_to_path = {executor.submit(_read_file_content_worker, fp, cache): fp for fp in files_to_read}
-            for i, future in enumerate(as_completed(future_to_path)):
-                # FIX (Ruff E701): Split statement to its own line
-                if cancel_event and cancel_event.is_set():
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    log_callback("Generation cancelled during content reading.")
-                    update_status("Cancelled.")
-                    return
-                
-                try:
-                    file_path, details = future.result()
-                    norm_path = os.path.normcase(os.path.abspath(file_path))
-                    file_details_map[norm_path] = details
-                    log_callback(f"  - Success: Read '{os.path.basename(file_path)}'")
-                except Exception as e:
-                    log_callback(f"  - Error reading file in worker: {e}")
-                
-                update_status(f"Reading file {i+1}/{total_to_read}...")
-                # FIX (Ruff E701): Split statement to its own line
-                if progress_callback:
-                    progress_callback(i + 1, total_to_read)
+        if files_to_read:
+            total_to_read = len(files_to_read)
+            update_status(f"Reading content for {total_to_read} files...")
+            log_callback(f"\n--- Reading content for {total_to_read} files (cache miss) ---")
 
-        # FIX (Ruff E701): Split statement to its own line
-        if cancel_event and cancel_event.is_set():
-            return
+            with ThreadPoolExecutor() as executor:
+                future_to_path = {executor.submit(_read_file_content_worker, fp, cache): fp for fp in files_to_read}
+                for i, future in enumerate(as_completed(future_to_path)):
+                    if cancel_event and cancel_event.is_set():
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        log_callback("Generation cancelled during content reading.")
+                        update_status("Cancelled.")
+                        return
+                    
+                    try:
+                        file_path, details = future.result()
+                        norm_path = os.path.normcase(os.path.abspath(file_path))
+                        file_details_map[norm_path] = details
+                    except Exception as e:
+                        log_callback(f"  - Error reading file in worker: {e}")
+                    
+                    if progress_callback:
+                        progress_callback(i + 1, total_to_read)
+        
+        if cancel_event and cancel_event.is_set(): return
 
         update_status("Building directory tree...")
         log_callback("\n--- Building Directory Tree ---")
@@ -215,16 +199,12 @@ def generate_text_content_fast(root_path, files_for_tree, files_for_content, is_
         final_content.append(tree_structure)
         final_content.append("\n```\n\n---\n\n## File Contents\n\n")
 
-        # FIX (Ruff E701): Split statement to its own line
-        if cancel_event and cancel_event.is_set():
-            return
+        if cancel_event and cancel_event.is_set(): return
 
         update_status("Formatting final output...")
         log_callback("\n--- Formatting final output ---")
         for file_path in sorted(files_for_content):
-            # FIX (Ruff E701): Split statement to its own line
-            if cancel_event and cancel_event.is_set():
-                return
+            if cancel_event and cancel_event.is_set(): return
 
             norm_path = os.path.normcase(os.path.abspath(file_path))
             details = file_details_map.get(norm_path)
@@ -236,7 +216,6 @@ def generate_text_content_fast(root_path, files_for_tree, files_for_content, is_
                 final_content.append(f"```{language}\n{details['content']}\n```\n\n---\n\n")
 
         if not (cancel_event and cancel_event.is_set()):
-            update_status("Generation complete!")
             success_callback("".join(final_content), file_details_map)
 
     except Exception as e:

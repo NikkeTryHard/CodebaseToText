@@ -42,3 +42,20 @@ class FileDetailCache:
     def clear(self):
         """Clears the entire cache."""
         self._cache.clear()
+
+class DummyCache:
+    """
+    A cache that does nothing. Used when caching is disabled.
+    This allows the same code path to be used without conditional checks.
+    """
+    def get(self, file_path):
+        """Always returns None, forcing a re-read."""
+        return None
+    
+    def set(self, file_path, data):
+        """Does nothing, preventing data from being stored."""
+        pass
+
+    def clear(self):
+        """Does nothing."""
+        pass

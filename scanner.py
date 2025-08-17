@@ -66,7 +66,7 @@ def _process_file_for_scan(file_path, cache):
     if cached_details:
         return file_path, cached_details
 
-    details = {'line_count': None, 'error': None}
+    details = {'line_count': None, 'error': None, 'content': None}
     try:
         if os.path.getsize(file_path) > MAX_FILE_SIZE_BYTES:
             raise FileTooLargeError(f"> {MAX_FILE_SIZE_MB}MB")
@@ -74,7 +74,10 @@ def _process_file_for_scan(file_path, cache):
             raise BinaryFileError("binary")
         
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            details['line_count'] = sum(1 for _ in f)
+            content = f.read()
+        details['content'] = content
+        details['line_count'] = content.count('\n') + 1
+
     except (OSError, FileProcessingError) as e:
         details['error'] = str(e)
     

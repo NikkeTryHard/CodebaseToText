@@ -7,11 +7,12 @@ class UI:
     Creates and manages all the UI widgets for the main application window.
     This class is responsible for the layout and does not contain application logic.
     """
-    def __init__(self, root, callbacks, root_dir_var, include_all_var):
+    def __init__(self, root, callbacks, root_dir_var, include_all_var, caching_enabled_var):
         self.root = root
         self.callbacks = callbacks
         self.root_dir_var = root_dir_var
         self.include_all_var = include_all_var
+        self.caching_enabled_var = caching_enabled_var
         
         self._create_menu()
         self.create_widgets()
@@ -33,6 +34,11 @@ class UI:
         menubar.add_cascade(label="Edit", menu=edit_menu)
         edit_menu.add_command(label="Check All", command=self.callbacks['check_all'])
         edit_menu.add_command(label="Uncheck All", command=self.callbacks['uncheck_all'])
+
+        # --- Settings Menu ---
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Preferences...", command=self.callbacks['show_settings'])
 
         # --- Help Menu ---
         help_menu = tk.Menu(menubar, tearoff=0)
@@ -83,17 +89,24 @@ class UI:
         ttk.Button(button_control_frame, text="Uncheck All", command=self.callbacks['uncheck_all']).grid(row=0, column=3, sticky="ew", padx=2)
 
         # --- Action Frame ---
-        action_frame = ttk.Frame(main_frame, padding=(0, 10))
+        action_frame = ttk.LabelFrame(main_frame, text="3. Configure and Generate", padding="10")
         action_frame.grid(row=2, column=0, sticky="ew")
         
         self.include_all_toggle = ttk.Checkbutton(
             action_frame,
-            text="Annotate Tree: Show all files in the directory structure.",
+            text="Annotate Tree: Show all files in the directory structure",
             variable=self.include_all_var,
             command=self.callbacks['toggle_include_all'],
             state='disabled'
         )
-        self.include_all_toggle.pack(fill=tk.X, pady=(0, 5))
+        self.include_all_toggle.pack(fill=tk.X, pady=(0, 5), anchor='w')
+
+        self.caching_toggle = ttk.Checkbutton(
+            action_frame,
+            text="Pre-load content during scan (faster generation)",
+            variable=self.caching_enabled_var
+        )
+        self.caching_toggle.pack(fill=tk.X, pady=(0, 10), anchor='w')
 
         # --- Button Container ---
         button_container = ttk.Frame(action_frame)
@@ -106,9 +119,9 @@ class UI:
 
         self.cancel_button = ttk.Button(button_container, text="Cancel", command=self.callbacks['cancel_operation'])
         self.cancel_button.grid(row=0, column=1, sticky="ew", padx=(2, 0), ipady=5)
-        self.cancel_button.grid_remove() # Hide cancel button initially
+        self.cancel_button.config(state='disabled') # Start in disabled state
 
-        self.status_label = ttk.Label(action_frame, text="", anchor="center")
+        self.status_label = ttk.Label(action_frame, text="", anchor="w")
         self.status_label.pack(fill=tk.X, pady=(5,0))
 
         self.progress_bar = ttk.Progressbar(action_frame, orient='horizontal', mode='determinate')
