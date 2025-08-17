@@ -249,10 +249,10 @@ class DirectoryToTextApp:
         self.tree_manager.uncheck_all()
 
     def on_closing(self):
-        # FIX: Preserve the ignore_list by getting its current value before setting others.
-        # This ensures it's part of the config object when we save.
-        current_ignore_list = self.config.get_setting('Settings', 'ignore_list')
-        self.config.set_setting('Settings', 'ignore_list', current_ignore_list)
+        # To preserve any manual changes to config.ini (like editing the ignore_list)
+        # that were made while the app was running, we must re-read the config file
+        # before saving the session-specific settings (window size, last folder).
+        self.config.config.read(self.config.config_file)
         
         # Now, update the settings that change during the session
         self.config.set_setting('Settings', 'width', self.root.winfo_width())
