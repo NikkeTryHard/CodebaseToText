@@ -10,10 +10,8 @@ from treeview_manager import TreeViewManager
 from output_window import show_output_window
 from config_manager import ConfigManager
 from ui import UI
-from caching import FileDetailCache, DummyCache
 from scanner import scan_directory_fast
 from generator import generate_text_content_fast
-from file_processor_utils import get_all_files
 from settings_window import show_settings_window
 
 def resource_path(relative_path):
@@ -28,13 +26,10 @@ class DirectoryToTextApp:
         self.root = root
         self.verbose = verbose
         self.config = ConfigManager()
-        self.file_cache = FileDetailCache()
-        self.dummy_cache = DummyCache()
         self.root_dir = tk.StringVar(value=self.config.get_setting('Settings', 'last_folder'))
         self._setup_window()
         self.include_all_var = tk.BooleanVar(value=False)
-        self.caching_enabled_var = tk.BooleanVar(value=True)
-        self.caching_enabled_var.trace_add("write", self.on_toggle_caching)
+        self.scanned_tree_data = None # This will hold the complete scanned data structure
 
         callbacks = {
             'select_folder': self.select_folder,
@@ -49,7 +44,7 @@ class DirectoryToTextApp:
             'show_about': self.show_about,
             'show_settings': self.show_settings,
         }
-        self.ui = UI(self.root, callbacks, self.root_dir, self.include_all_var, self.caching_enabled_var)
+        self.ui = UI(self.root, callbacks, self.root_dir, self.include_all_var)
         self.ui.tree.tag_configure('ignored', foreground='gray')
         self.ignored_items = self.config.get_ignored_set()
         self.tree_manager = TreeViewManager(self.ui.tree, self.root, self.log_message, self.ignored_items)
@@ -67,7 +62,7 @@ class DirectoryToTextApp:
     def _setup_window(self):
         width = self.config.get_setting('Settings', 'width')
         height = self.config.get_setting('Settings', 'height')
-        self.root.title("CodebaseToText v7.2") 
+        self.root.title("CodebaseToText v7.3") 
         self.root.geometry(f"{width}x{height}")
         theme = self.config.get_setting('Settings', 'theme')
         if theme not in ['dark', 'light']:
@@ -90,6 +85,7 @@ class DirectoryToTextApp:
         self.root_dir.set(folder_path)
         self.log_message(f"Scanning folder: {folder_path}")
         
+        self.scanned_tree_data = None # Clear previous scan data
         self.tree_manager.clear_tree()
         self.ui.tree.insert("", "end", text="  Scanning and analyzing files, please wait...")
         
@@ -98,23 +94,21 @@ class DirectoryToTextApp:
         self.ui.cancel_button.config(state='normal')
         self.operation_start_time = time.time()
         
-        self.file_cache.clear() # Always clear cache before a new scan
-        current_cache = self.file_cache if self.caching_enabled_var.get() else self.dummy_cache
-        
         self.cancel_scan.clear()
         self.scan_thread = threading.Thread(
             target=self._scan_folder_thread_fast,
-            args=(folder_path, self.cancel_scan, current_cache),
+            args=(folder_path, self.cancel_scan),
             daemon=True
         )
         self.scan_thread.start()
 
-    def _scan_folder_thread_fast(self, folder_path, cancel_event, cache_to_use):
+    def _scan_folder_thread_fast(self, folder_path, cancel_event):
         """Worker function to scan directory in the background."""
         tree_data = None
         try:
-            tree_data = scan_directory_fast(folder_path, self.ignored_items, cache_to_use, cancel_event)
+            tree_data = scan_directory_fast(folder_path, self.ignored_items, cancel_event)
             if tree_data:
+                self.scanned_tree_data = tree_data  # <-- STORE THE RESULT
                 self.root.after(0, self._populate_tree_ui, tree_data)
         except Exception as e:
             self.log_message(f"Error scanning directory: {e}")
@@ -167,32 +161,17 @@ class DirectoryToTextApp:
         else:
             self.log_message("Standard Mode: Tree shows only selected items. Unselected folders will be collapsed.")
     
-    def on_toggle_caching(self, *args):
-        if not self.caching_enabled_var.get():
-            self.file_cache.clear()
-            self.log_message("Pre-loading disabled. Cache has been cleared.")
-            self.update_status("Pre-loading disabled. Generation may be slower.")
-        else:
-            self.log_message("Pre-loading enabled.")
-            self.update_status("Pre-loading enabled.")
-
     def start_conversion_thread(self):
         root_path = self.root_dir.get()
-        if not root_path or not os.path.isdir(root_path):
-            messagebox.showerror("Error", "Please select a valid root directory first.")
+        if not self.scanned_tree_data:
+            messagebox.showerror("Error", "No directory has been scanned successfully.")
             return
 
         files_for_content = self.tree_manager.get_checked_files()
-        item_states = self.tree_manager.get_all_item_states()
         is_annotated_mode = self.include_all_var.get()
         
         if not files_for_content and not is_annotated_mode:
             messagebox.showwarning("No Files Selected", "Please check at least one file to include its content in the output.")
-            return
-        
-        files_for_tree = get_all_files(root_path)
-        if not files_for_tree:
-            messagebox.showwarning("No Files Found", "No files were found in the directory.")
             return
         
         self.log_message("Starting generation...")
@@ -205,16 +184,13 @@ class DirectoryToTextApp:
         self.ui.progress_bar['value'] = 0
         self.cancel_generation.clear()
 
-        # The generator will use the main file_cache. If pre-loading was off,
-        # it will be empty and the generator will read files on-demand.
+        # This is now the fast path, directly using the scanned data.
         self.generation_thread = threading.Thread(
             target=generate_text_content_fast,
             args=(
-                root_path, files_for_tree, files_for_content, is_annotated_mode, 
-                self.ignored_items, item_states, self.log_message, 
-                self.display_results, self._reset_ui_after_generation, 
-                self.file_cache, self.update_progress, self.update_status, 
-                self.cancel_generation
+                root_path, self.scanned_tree_data, files_for_content, is_annotated_mode, 
+                self.log_message, self._thread_safe_display_results, self._thread_safe_reset_after_generation,
+                self.cancel_generation, self.update_status, self.update_progress
             ),
             daemon=True
         )
@@ -231,9 +207,15 @@ class DirectoryToTextApp:
             self.update_status("Cancelling generation...")
             self.cancel_generation.set()
 
-    def display_results(self, content, file_details_map):
+    def _thread_safe_display_results(self, content):
+        self.root.after(0, self.display_results, content)
+
+    def display_results(self, content):
         self.log_message("Generation complete. Opening output window.")
         show_output_window(self.root, content, self.log_message)
+
+    def _thread_safe_reset_after_generation(self):
+        self.root.after(0, self._reset_ui_after_generation)
 
     def _reset_ui_after_generation(self):
         self.ui.generate_button.config(state='normal')
@@ -251,8 +233,11 @@ class DirectoryToTextApp:
         self.update_status(status_message + duration_message)
 
     def update_progress(self, current, total):
-        self.ui.progress_bar['maximum'] = total
-        self.ui.progress_bar['value'] = current
+        """Thread-safe progress update."""
+        def _update():
+            self.ui.progress_bar['maximum'] = total
+            self.ui.progress_bar['value'] = current
+        self.root.after(0, _update)
         
     def update_status(self, message):
         """Thread-safe method to update the status label."""
@@ -265,7 +250,7 @@ class DirectoryToTextApp:
     def show_about(self):
         messagebox.showinfo(
             "About CodebaseToText",
-            "Version: 7.2\n\n"
+            "Version: 7.3\n\n"
             "This application helps you package a codebase into a single markdown file for use with Large Language Models."
         )
 

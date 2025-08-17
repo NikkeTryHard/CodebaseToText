@@ -60,12 +60,8 @@ def scan_directory(path, ignored_items, cancel_event=None):
         pass
     return node
 
-def _process_file_for_scan(file_path, cache):
+def _process_file_for_scan(file_path):
     """Worker function for the thread pool during scanning."""
-    cached_details = cache.get(file_path)
-    if cached_details:
-        return file_path, cached_details
-
     details = {'line_count': None, 'error': None, 'content': None}
     try:
         if os.path.getsize(file_path) > MAX_FILE_SIZE_BYTES:
@@ -81,10 +77,9 @@ def _process_file_for_scan(file_path, cache):
     except (OSError, FileProcessingError) as e:
         details['error'] = str(e)
     
-    cache.set(file_path, details)
     return file_path, details
 
-def scan_directory_fast(path, ignored_items, cache, cancel_event=None):
+def scan_directory_fast(path, ignored_items, cancel_event=None):
     """
     Scans a directory using a thread pool to accelerate file analysis and correctly builds the tree structure.
     """
@@ -106,7 +101,7 @@ def scan_directory_fast(path, ignored_items, cache, cancel_event=None):
                 file_paths_to_process.append(os.path.join(root, file_name))
 
     with ThreadPoolExecutor() as executor:
-        future_to_path = {executor.submit(_process_file_for_scan, fp, cache): fp for fp in file_paths_to_process}
+        future_to_path = {executor.submit(_process_file_for_scan, fp): fp for fp in file_paths_to_process}
         for future in as_completed(future_to_path):
             if cancel_event and cancel_event.is_set():
                 executor.shutdown(wait=False, cancel_futures=True)

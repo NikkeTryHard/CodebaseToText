@@ -3,9 +3,8 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext
 import os
 
-# Set a character limit to prevent the app from freezing on huge outputs
-# 5 million characters is roughly 5 MB, a safe limit for Tkinter.
-OUTPUT_CHARACTER_LIMIT = 5_000_000
+# Lowered limit to prevent slow inserts in Tkinter for large outputs
+OUTPUT_CHARACTER_LIMIT = 1_000_000
 
 def _copy_to_clipboard(root, text_widget, status_label, log_callback):
     """Copies the content of the text widget to the system clipboard."""
@@ -51,13 +50,13 @@ def show_output_window(parent_root, content, log_callback):
         state='normal',
         font=("Courier New", 10),
         padx=10,
-        pady=10
+        pady=10,
+        undo=False  # Disable undo for faster large inserts
     )
     content_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
     if len(content) > OUTPUT_CHARACTER_LIMIT:
         try:
-            # FIX (Ruff E722): Use specific exception handling instead of bare 'except'
             desktop = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
         except KeyError:
             desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
@@ -90,5 +89,3 @@ def show_output_window(parent_root, content, log_callback):
     # FIX: Make the window non-modal to prevent the main app from freezing.
     # The main window will remain interactive.
     output_win.transient(parent_root)
-    # REMOVED: output_win.grab_set()
-    # REMOVED: parent_root.wait_window(output_win)

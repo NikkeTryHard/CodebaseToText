@@ -7,12 +7,11 @@ class UI:
     Creates and manages all the UI widgets for the main application window.
     This class is responsible for the layout and does not contain application logic.
     """
-    def __init__(self, root, callbacks, root_dir_var, include_all_var, caching_enabled_var):
+    def __init__(self, root, callbacks, root_dir_var, include_all_var):
         self.root = root
         self.callbacks = callbacks
         self.root_dir_var = root_dir_var
         self.include_all_var = include_all_var
-        self.caching_enabled_var = caching_enabled_var
         
         self._create_menu()
         self.create_widgets()
@@ -100,13 +99,6 @@ class UI:
             state='disabled'
         )
         self.include_all_toggle.pack(fill=tk.X, pady=(0, 5), anchor='w')
-
-        self.caching_toggle = ttk.Checkbutton(
-            action_frame,
-            text="Pre-load content during scan (faster generation)",
-            variable=self.caching_enabled_var
-        )
-        self.caching_toggle.pack(fill=tk.X, pady=(0, 10), anchor='w')
 
         # --- Button Container ---
         button_container = ttk.Frame(action_frame)
