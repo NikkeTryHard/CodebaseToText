@@ -47,7 +47,8 @@ class DirectoryToTextApp:
         self.ui = UI(self.root, callbacks, self.root_dir, self.include_all_var)
         self.ui.tree.tag_configure('ignored', foreground='gray')
         self.ignored_items = self.config.get_ignored_set()
-        self.tree_manager = TreeViewManager(self.ui.tree, self.root, self.log_message, self.ignored_items)
+        # Pass the resource_path function to the manager so it can find image assets
+        self.tree_manager = TreeViewManager(self.ui.tree, self.root, self.log_message, self.ignored_items, resource_path)
         self._setup_event_bindings()
 
         self.scan_thread = None
@@ -251,12 +252,20 @@ class DirectoryToTextApp:
         )
 
     def show_settings(self):
-        """Shows the settings/preferences window."""
+        """Shows the settings window and re-scans if changes were saved."""
         settings_saved = show_settings_window(self.root, self.config)
         if settings_saved:
             self.ignored_items = self.config.get_ignored_set()
-            self.log_message("Ignore list updated. Please re-scan folder for changes to take effect.")
-            self.update_status("Ignore list updated. Re-scan folder to apply changes.")
+            
+            current_folder = self.root_dir.get()
+            if current_folder and os.path.isdir(current_folder):
+                self.log_message("Settings updated. Automatically re-scanning directory...")
+                self.update_status("Settings updated. Re-scanning directory...")
+                self._load_folder(current_folder)
+            else:
+                self.log_message("Settings updated. No folder loaded to re-scan.")
+                self.update_status("Settings updated. Select a folder to see changes.")
+
 
     def check_selected(self): self.tree_manager.check_selected()
     def uncheck_selected(self): self.tree_manager.uncheck_selected()

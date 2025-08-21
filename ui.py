@@ -80,12 +80,11 @@ class UI:
         # --- Treeview Control Buttons ---
         button_control_frame = ttk.Frame(tree_container)
         button_control_frame.grid(row=1, column=0, sticky="ew", pady=(10, 0))
-        button_control_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        button_control_frame.grid_columnconfigure((0, 1), weight=1) # Configure for 2 columns
         
-        ttk.Button(button_control_frame, text="Check Sel.", command=self.callbacks['check_selected']).grid(row=0, column=0, sticky="ew", padx=2)
-        ttk.Button(button_control_frame, text="Uncheck Sel.", command=self.callbacks['uncheck_selected']).grid(row=0, column=1, sticky="ew", padx=2)
-        ttk.Button(button_control_frame, text="Check All", command=self.callbacks['check_all']).grid(row=0, column=2, sticky="ew", padx=2)
-        ttk.Button(button_control_frame, text="Uncheck All", command=self.callbacks['uncheck_all']).grid(row=0, column=3, sticky="ew", padx=2)
+        # REMOVED "Check Sel." and "Uncheck Sel." buttons for a cleaner, more intuitive UI
+        ttk.Button(button_control_frame, text="Check All", command=self.callbacks['check_all']).grid(row=0, column=0, sticky="ew", padx=2)
+        ttk.Button(button_control_frame, text="Uncheck All", command=self.callbacks['uncheck_all']).grid(row=0, column=1, sticky="ew", padx=2)
 
         # --- Action Frame ---
         action_frame = ttk.LabelFrame(main_frame, text="3. Configure and Generate", padding="10")
