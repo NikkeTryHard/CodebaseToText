@@ -74,6 +74,9 @@ def _generate_tree_lines_from_node(node, is_annotated_mode, prefix=""):
         child = children[child_index]
         stack[-1] = (child_index - 1, children, cur_prefix, current)  # Decrement index for next iteration
         
+        if child.get('is_ignored'):
+            continue
+        
         if not is_annotated_mode and not child.get('_is_visible'):
             continue
         

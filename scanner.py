@@ -81,25 +81,53 @@ def _process_file_for_scan(file_path):
 
 def scan_directory_fast(path, ignored_items, cancel_event=None):
     """
-    Scans a directory using a thread pool to accelerate file analysis and correctly builds the tree structure.
+    Scans a directory using a thread pool to accelerate file analysis and correctly builds the tree structure,
+    including ignored files/folders which are marked accordingly.
     """
-    # FIX (Ruff E701): Split statement to its own line
     if not os.path.isdir(path):
         return None
 
-    file_paths_to_process = []
     nodes = {}
+    file_paths_to_process = []
 
+    # First, build the entire directory and file structure map from a single walk
     for root, dirs, files in os.walk(path, topdown=True):
-        # FIX (Ruff E701): Split statement to its own line
         if cancel_event and cancel_event.is_set():
             return None
-        dirs[:] = [d for d in dirs if d not in ignored_items]
-        
-        for file_name in files:
-            if file_name not in ignored_items:
-                file_paths_to_process.append(os.path.join(root, file_name))
 
+        # Add the directory node for the current root
+        norm_root = os.path.normcase(os.path.abspath(root))
+        if norm_root not in nodes:
+            nodes[norm_root] = {
+                'path': root, 'name': os.path.basename(root), 'is_dir': True,
+                'is_ignored': os.path.basename(root) in ignored_items, 'children': []
+            }
+
+        # Process subdirectories, adding them to our node map
+        for dir_name in dirs:
+            dir_path = os.path.join(root, dir_name)
+            norm_path = os.path.normcase(os.path.abspath(dir_path))
+            nodes[norm_path] = {
+                'path': dir_path, 'name': dir_name, 'is_dir': True,
+                'is_ignored': dir_name in ignored_items, 'children': []
+            }
+
+        # Process files, adding them to our node map
+        for file_name in files:
+            file_path = os.path.join(root, file_name)
+            norm_path = os.path.normcase(os.path.abspath(file_path))
+            is_ignored = file_name in ignored_items
+            nodes[norm_path] = {
+                'path': file_path, 'name': file_name, 'is_dir': False,
+                'is_ignored': is_ignored
+            }
+            if not is_ignored:
+                file_paths_to_process.append(file_path)
+
+        # Prune traversal into ignored directories for performance
+        dirs[:] = [d for d in dirs if d not in ignored_items]
+
+    # Process non-ignored files in parallel to get their content and line counts
     with ThreadPoolExecutor() as executor:
         future_to_path = {executor.submit(_process_file_for_scan, fp): fp for fp in file_paths_to_process}
         for future in as_completed(future_to_path):
@@ -109,37 +137,22 @@ def scan_directory_fast(path, ignored_items, cancel_event=None):
             try:
                 file_path, details = future.result()
                 norm_path = os.path.normcase(os.path.abspath(file_path))
-                nodes[norm_path] = {
-                    'path': file_path, 'name': os.path.basename(file_path), 'is_dir': False,
-                    'is_ignored': os.path.basename(file_path) in ignored_items, **details
-                }
+                if norm_path in nodes:
+                    nodes[norm_path].update(details)
             except Exception:
                 pass
 
-    for root, dirs, _ in os.walk(path, topdown=True):
-        dirs[:] = [d for d in dirs if d not in ignored_items]
-        for dir_name in dirs:
-            dir_path = os.path.join(root, dir_name)
-            norm_path = os.path.normcase(os.path.abspath(dir_path))
-            if norm_path not in nodes:
-                nodes[norm_path] = {
-                    'path': dir_path, 'name': dir_name, 'is_dir': True,
-                    'is_ignored': dir_name in ignored_items, 'children': []
-                }
-
+    # Link children to their parents to build the tree structure
     norm_root_path = os.path.normcase(os.path.abspath(path))
-    if norm_root_path not in nodes:
-        nodes[norm_root_path] = {
-            'path': path, 'name': os.path.basename(path), 'is_dir': True,
-            'is_ignored': os.path.basename(path) in ignored_items, 'children': []
-        }
-
     for norm_path, node in nodes.items():
+        if norm_path == norm_root_path:
+            continue
         parent_dir = os.path.dirname(node['path'])
         norm_parent_dir = os.path.normcase(os.path.abspath(parent_dir))
-        if norm_parent_dir in nodes and norm_parent_dir != norm_path:
+        if norm_parent_dir in nodes:
             nodes[norm_parent_dir].setdefault('children', []).append(node)
 
+    # Sort children recursively for consistent display
     def sort_children_recursive(node):
         if 'children' in node and node.get('is_dir'):
             node['children'].sort(key=lambda x: (not x.get('is_dir', False), x.get('name', '').lower()))

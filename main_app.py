@@ -170,10 +170,6 @@ class DirectoryToTextApp:
         files_for_content = self.tree_manager.get_checked_files()
         is_annotated_mode = self.include_all_var.get()
         
-        if not files_for_content and not is_annotated_mode:
-            messagebox.showwarning("No Files Selected", "Please check at least one file to include its content in the output.")
-            return
-        
         self.log_message("Starting generation...")
         self.ui.generate_button.config(state='disabled')
         self.ui.browse_button.config(state='disabled')

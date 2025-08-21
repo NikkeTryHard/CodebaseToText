@@ -41,7 +41,8 @@ class TreeViewManager:
         if not root_node_data:
             return
         
-        root_node = self.tree.insert("", "end", text=f" {CHECKED_EMOJI} {root_node_data['name']}", open=True, values=[root_node_data['path'], "checked"])
+        # The root node has a special state "root_state" to make it non-toggleable.
+        root_node = self.tree.insert("", "end", text=f" {CHECKED_EMOJI} {root_node_data['name']}", open=True, values=[root_node_data['path'], "root_state"])
         if root_node_data.get('children'):
             self._populate_recursive(root_node_data['children'], root_node)
 
@@ -76,6 +77,7 @@ class TreeViewManager:
             return
 
         values = self.tree.item(item_id, "values")
+        # Ignored items are not interactive at all.
         if not values or values[1] == "ignored":
             return
 
@@ -94,21 +96,24 @@ class TreeViewManager:
         text_width = self.tree_font.measure(main_text)
 
         if bbox[0] <= event.x < bbox[0] + checkbox_width:
-            self.toggle_check_state(item_id)
+            # Prevent toggling the state of the root item.
+            if values[1] != "root_state":
+                self.toggle_check_state(item_id)
         elif bbox[0] + checkbox_width <= event.x < bbox[0] + text_width:
             if os.path.isdir(values[0]):
                 self.tree.item(item_id, open=not self.tree.item(item_id, "open"))
 
     def toggle_check_state(self, item_id):
         values = self.tree.item(item_id, "values")
-        if not values or values[1] == "ignored":
+        if not values or values[1] in ["ignored", "root_state"]:
             return
         new_state = "unchecked" if values[1] == "checked" else "checked"
         self.update_check_state(item_id, new_state)
 
     def update_check_state(self, item_id, state):
         values = self.tree.item(item_id, "values")
-        if not values or values[1] == "ignored":
+        # Prevent changing the state of ignored items or the special root item.
+        if not values or values[1] in ["ignored", "root_state"]:
             return
 
         current_text = self.tree.item(item_id, "text")
@@ -134,11 +139,18 @@ class TreeViewManager:
             if not values:
                 return
             path, state = values[0], values[1]
-            if state == "checked":
-                if os.path.isfile(path):
+
+            # We traverse into children if the node is checked OR it's the special root node.
+            if state == "checked" or state == "root_state":
+                # Only add the path if it's a file and is explicitly checked (not the root).
+                if os.path.isfile(path) and state == "checked":
                     checked_files.append(path)
-                for child_id in self.tree.get_children(item_id):
-                    _recurse_tree(child_id)
+                
+                # Recurse into children of any checked directory or the root.
+                if os.path.isdir(path):
+                    for child_id in self.tree.get_children(item_id):
+                        _recurse_tree(child_id)
+
         root_items = self.tree.get_children()
         if root_items:
             for item in root_items:
@@ -210,10 +222,14 @@ class TreeViewManager:
 
     def check_all(self):
         for item_id in self.tree.get_children():
+            # This will start the recursion on the root, but the guard in
+            # update_check_state will prevent the root itself from changing.
+            # It will, however, correctly check all of its children.
             self.update_check_state(item_id, "checked")
 
     def uncheck_all(self):
         for item_id in self.tree.get_children():
+            # Same logic as check_all applies here.
             self.update_check_state(item_id, "unchecked")
 
     def check_selected(self):
