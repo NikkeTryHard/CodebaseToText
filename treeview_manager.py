@@ -64,7 +64,8 @@ class TreeViewManager:
 
     def handle_tree_click(self, event):
         item_id = self.tree.identify_row(event.y)
-        if not item_id: return
+        if not item_id:
+            return
         element = self.tree.identify_element(event.x, event.y)
         if "image" in element:
             self.toggle_check_state(item_id)
@@ -82,13 +83,15 @@ class TreeViewManager:
 
     def toggle_check_state(self, item_id):
         values = self.tree.item(item_id, "values")
-        if not values or values[1] in ["ignored", "root_state"]: return
+        if not values or values[1] in ["ignored", "root_state"]:
+            return
         new_state = "unchecked" if values[1] == "checked" else "checked"
         self.update_check_state(item_id, new_state)
 
     def update_check_state(self, item_id, state):
         values = self.tree.item(item_id, "values")
-        if not values or values[1] in ["ignored", "root_state"]: return
+        if not values or values[1] in ["ignored", "root_state"]:
+            return
 
         new_image = self.checked_img if state == "checked" else self.unchecked_img
         self.tree.item(item_id, image=new_image, values=[values[0], state])
@@ -100,7 +103,8 @@ class TreeViewManager:
         checked_files = []
         def _recurse(item_id):
             values = self.tree.item(item_id, "values")
-            if not values: return
+            if not values:
+                return
             path, state = values[0], values[1]
             if state == "checked" or state == "root_state":
                 if os.path.isfile(path) and state == "checked":
@@ -114,12 +118,14 @@ class TreeViewManager:
 
     def check_all(self):
         root_items = self.tree.get_children()
-        if not root_items: return
+        if not root_items:
+            return
         for child_id in self.tree.get_children(root_items[0]):
             self.update_check_state(child_id, "checked")
 
     def uncheck_all(self):
         root_items = self.tree.get_children()
-        if not root_items: return
+        if not root_items:
+            return
         for child_id in self.tree.get_children(root_items[0]):
             self.update_check_state(child_id, "unchecked")

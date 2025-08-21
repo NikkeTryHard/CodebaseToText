@@ -40,7 +40,7 @@ def _mark_visible_nodes(node, content_set):
                 stack.append((child, False))
     return node.get('_is_visible', False)
 
-def _generate_tree_lines_recursive(node, is_annotated_mode, prefix=""):
+def _generate_tree_lines_recursive(node, prefix=""):
     """
     Correctly and recursively traverses the tree data to generate the visual tree
     for the output file, handling all states: ignored, omitted, and visible.
@@ -55,24 +55,14 @@ def _generate_tree_lines_recursive(node, is_annotated_mode, prefix=""):
         
         is_visible = child.get('_is_visible', False)
         
-        # --- Determine if this node should be shown at all ---
-        should_show_node = (
-            child.get('is_ignored') or 
-            is_annotated_mode or 
-            (not is_annotated_mode and is_visible)
-        )
-
-        if not should_show_node:
-            continue
-
         # --- Build the output line for the node ---
         annotations = []
         
         # 1. Highest priority: Ignored
         if child.get('is_ignored'):
             annotations.append("ignored")
-        # 2. Annotated Mode: Handle omitted items
-        elif is_annotated_mode and not is_visible:
+        # 2. Not visible (unchecked): Mark as omitted
+        elif not is_visible:
             if child.get('is_dir'):
                 annotations.append("omitted")
             else: # It's a file
@@ -81,7 +71,7 @@ def _generate_tree_lines_recursive(node, is_annotated_mode, prefix=""):
                 elif child.get('line_count') is not None:
                     annotations.append(f"{child['line_count']} lines")
                 annotations.append("content omitted")
-        # 3. Visible items (in either mode)
+        # 3. Visible items (checked)
         else:
             if not child.get('is_dir'):
                 if child.get('error'):
@@ -93,35 +83,40 @@ def _generate_tree_lines_recursive(node, is_annotated_mode, prefix=""):
         lines.append(f"{prefix}{connector}{child['name']}{annotation_str}")
 
         # --- Decide whether to recurse into children ---
+        # Recurse if it's a directory, not ignored, and is visible (i.e., not omitted).
+        # We don't want to show the contents of an omitted folder.
         should_recurse = (
             child.get('is_dir') and
             not child.get('is_ignored') and
-            not (is_annotated_mode and not is_visible) # Don't recurse into omitted folders
+            is_visible
         )
 
         if should_recurse:
-            lines.extend(_generate_tree_lines_recursive(child, is_annotated_mode, prefix + extension))
+            lines.extend(_generate_tree_lines_recursive(child, prefix + extension))
             
     return lines
 
-def generate_text_content_fast(root_path, scanned_tree_data, files_for_content, is_annotated_mode, log_callback, success_callback, final_callback, cancel_event=None, status_callback=None, progress_callback=None):
+def generate_text_content_fast(root_path, scanned_tree_data, files_for_content, log_callback, success_callback, final_callback, cancel_event=None, status_callback=None, progress_callback=None):
     def update_status(msg):
-        if status_callback: status_callback(msg)
+        if status_callback:
+            status_callback(msg)
 
     try:
         final_content = []
         base_path_for_relpath = os.path.dirname(root_path)
 
         update_status("Analyzing selections...")
-        if cancel_event and cancel_event.is_set(): return
+        if cancel_event and cancel_event.is_set():
+            return
         content_set = {os.path.normcase(os.path.abspath(p)) for p in files_for_content}
         _mark_visible_nodes(scanned_tree_data, content_set)
 
         update_status("Building directory tree...")
-        if cancel_event and cancel_event.is_set(): return
+        if cancel_event and cancel_event.is_set():
+            return
         
         tree_header = f"{scanned_tree_data['name']}"
-        tree_lines = _generate_tree_lines_recursive(scanned_tree_data, is_annotated_mode)
+        tree_lines = _generate_tree_lines_recursive(scanned_tree_data)
         tree_structure = "\n".join([tree_header] + tree_lines)
 
         final_content.append("# Codebase Structure and File Contents\n\n## Project Structure\n\n```text\n")
@@ -129,7 +124,8 @@ def generate_text_content_fast(root_path, scanned_tree_data, files_for_content, 
         final_content.append("\n```\n\n---\n\n## File Contents\n\n")
 
         update_status("Preparing file content...")
-        if cancel_event and cancel_event.is_set(): return
+        if cancel_event and cancel_event.is_set():
+            return
         file_details_map = _flatten_tree_to_map(scanned_tree_data)
 
         update_status("Formatting final output...")
@@ -137,7 +133,8 @@ def generate_text_content_fast(root_path, scanned_tree_data, files_for_content, 
         last_progress_update = time.time()
 
         for i, file_path in enumerate(files_for_content):
-            if cancel_event and cancel_event.is_set(): return
+            if cancel_event and cancel_event.is_set():
+                return
             
             norm_path = os.path.normcase(os.path.abspath(file_path))
             details = file_details_map.get(norm_path)

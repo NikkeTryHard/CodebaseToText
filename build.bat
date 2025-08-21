@@ -46,12 +46,17 @@ echo.
 REM This command rebuilds the application from scratch.
 REM Using --noupx to explicitly disable UPX and avoid the ambiguous option bug.
 REM ADDED assets folder to --add-data
+REM =============================================================================
+REM  MODIFICATION: Forcefully add the python311.dll. 
+REM  IMPORTANT: Replace the path below with the correct path on YOUR system!
+REM =============================================================================
 pyinstaller main.py ^
     --name "CodebaseToText" ^
     --windowed ^
     --add-data "theme;theme" ^
     --add-data "assets;assets" ^
     --add-data "azure.tcl;." ^
+    --add-binary "C:\Users\ccc80\AppData\Local\Programs\Python\Python311\python311.dll;." ^
     --noupx ^
     --noconfirm
 

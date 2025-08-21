@@ -28,7 +28,6 @@ class DirectoryToTextApp:
         self.config = ConfigManager()
         self.root_dir = tk.StringVar(value=self.config.get_setting('Settings', 'last_folder'))
         self._setup_window()
-        self.include_all_var = tk.BooleanVar(value=False)
         self.scanned_tree_data = None # This will hold the complete scanned data structure
 
         callbacks = {
@@ -37,14 +36,13 @@ class DirectoryToTextApp:
             'uncheck_selected': self.uncheck_selected,
             'check_all': self.check_all,
             'uncheck_all': self.uncheck_all,
-            'toggle_include_all': self.on_toggle_include_all,
             'start_conversion': self.start_conversion_thread,
             'cancel_operation': self.cancel_current_operation,
             'exit': self.on_closing,
             'show_about': self.show_about,
             'show_settings': self.show_settings,
         }
-        self.ui = UI(self.root, callbacks, self.root_dir, self.include_all_var)
+        self.ui = UI(self.root, callbacks, self.root_dir)
         self.ui.tree.tag_configure('ignored', foreground='gray')
         self.ignored_items = self.config.get_ignored_set()
         # Pass the resource_path function to the manager so it can find image assets
@@ -120,9 +118,6 @@ class DirectoryToTextApp:
         """Callback to update the treeview on the main thread."""
         self.log_message("Scan complete. Populating UI.")
         self.tree_manager.populate_from_data(tree_data)
-        self.include_all_var.set(False)
-        self.on_toggle_include_all()
-        self.ui.include_all_toggle.config(state='normal')
 
     def _reset_ui_after_scan(self, cancelled=False):
         """Resets the UI state after a scan finishes or is cancelled."""
@@ -155,12 +150,6 @@ class DirectoryToTextApp:
         if event.data:
             folder_path = event.data.strip()
             self._load_folder(folder_path)
-
-    def on_toggle_include_all(self):
-        if self.include_all_var.get():
-            self.log_message("Annotated Tree Mode: Tree will show all files. Unchecked items will be marked as omitted.")
-        else:
-            self.log_message("Standard Mode: Tree shows only selected items. Unselected folders will be collapsed.")
     
     def start_conversion_thread(self):
         root_path = self.root_dir.get()
@@ -169,7 +158,6 @@ class DirectoryToTextApp:
             return
 
         files_for_content = self.tree_manager.get_checked_files()
-        is_annotated_mode = self.include_all_var.get()
         
         self.log_message("Starting generation...")
         self.ui.generate_button.config(state='disabled')
@@ -185,7 +173,7 @@ class DirectoryToTextApp:
         self.generation_thread = threading.Thread(
             target=generate_text_content_fast,
             args=(
-                root_path, self.scanned_tree_data, files_for_content, is_annotated_mode, 
+                root_path, self.scanned_tree_data, files_for_content, 
                 self.log_message, self._thread_safe_display_results, self._thread_safe_reset_after_generation,
                 self.cancel_generation, self.update_status, self.update_progress
             ),

@@ -7,11 +7,10 @@ class UI:
     Creates and manages all the UI widgets for the main application window.
     This class is responsible for the layout and does not contain application logic.
     """
-    def __init__(self, root, callbacks, root_dir_var, include_all_var):
+    def __init__(self, root, callbacks, root_dir_var):
         self.root = root
         self.callbacks = callbacks
         self.root_dir_var = root_dir_var
-        self.include_all_var = include_all_var
         
         self._create_menu()
         self.create_widgets()
@@ -87,18 +86,9 @@ class UI:
         ttk.Button(button_control_frame, text="Uncheck All", command=self.callbacks['uncheck_all']).grid(row=0, column=1, sticky="ew", padx=2)
 
         # --- Action Frame ---
-        action_frame = ttk.LabelFrame(main_frame, text="3. Configure and Generate", padding="10")
+        action_frame = ttk.LabelFrame(main_frame, text="3. Generate", padding="10")
         action_frame.grid(row=2, column=0, sticky="ew")
         
-        self.include_all_toggle = ttk.Checkbutton(
-            action_frame,
-            text="Annotate Tree: Show all files in the directory structure",
-            variable=self.include_all_var,
-            command=self.callbacks['toggle_include_all'],
-            state='disabled'
-        )
-        self.include_all_toggle.pack(fill=tk.X, pady=(0, 5), anchor='w')
-
         # --- Button Container ---
         button_container = ttk.Frame(action_frame)
         button_container.pack(fill=tk.X, pady=(5, 0))
