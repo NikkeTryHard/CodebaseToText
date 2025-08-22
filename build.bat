@@ -7,19 +7,33 @@ REM                MAIN SCRIPT LOGIC
 REM =================================================
 
 call :print_header "CodebaseToText Build Script"
-echo This script will build the application using PyInstaller.
+echo This script will build the application using the CodebaseToText.spec file.
 echo.
 
 REM --- Step 1: Cleaning ---
 set "choice="
-set /p choice="Do you want to CLEAN previous build artifacts (dist, build, .spec)? (y/n): "
-if /i "%choice%"=="y" (
-    call :clean_artifacts
-) else (
-    echo.
-    echo Skipping the cleaning step.
-)
+set /p choice="Do you want to CLEAN previous build artifacts (dist, build)? (y/n): "
+if /i "%choice%"=="y" goto do_clean
 
+echo.
+echo Skipping the cleaning step.
+goto after_clean
+
+:do_clean
+    call :print_header "Cleaning previous build artifacts..."
+    if exist "dist" (
+        echo -^> Deleting 'dist' directory...
+        rmdir /s /q "dist"
+    )
+    if exist "build" (
+        echo -^> Deleting 'build' directory...
+        rmdir /s /q "build"
+    )
+    echo.
+    echo Cleaning complete.
+    goto after_clean
+
+:after_clean
 REM --- Step 2: Confirmation to Build ---
 echo.
 echo Press any key to start the build process...
@@ -38,27 +52,13 @@ if %errorlevel% neq 0 (
 )
 echo PyInstaller found.
 
-REM --- Step 4: Run the Build ---
-call :print_header "Starting PyInstaller build..."
+REM --- Step 4: Run the Build using the .spec file ---
+call :print_header "Starting PyInstaller build from .spec file..."
 echo The full output from PyInstaller will be displayed below.
 echo.
 
-REM This command rebuilds the application from scratch.
-REM Using --noupx to explicitly disable UPX and avoid the ambiguous option bug.
-REM ADDED assets folder to --add-data
-REM =============================================================================
-REM  MODIFICATION: Forcefully add the python311.dll. 
-REM  IMPORTANT: Replace the path below with the correct path on YOUR system!
-REM =============================================================================
-pyinstaller main.py ^
-    --name "CodebaseToText" ^
-    --windowed ^
-    --add-data "theme;theme" ^
-    --add-data "assets;assets" ^
-    --add-data "azure.tcl;." ^
-    --add-binary "C:\Users\ccc80\AppData\Local\Programs\Python\Python311\python311.dll;." ^
-    --noupx ^
-    --noconfirm
+REM This command now builds directly from the .spec file, which is cleaner.
+pyinstaller CodebaseToText.spec --noconfirm
 
 REM Check if the build command was successful
 if %errorlevel% neq 0 (
@@ -70,7 +70,8 @@ if %errorlevel% neq 0 (
 
 REM --- Step 5: Success Message ---
 call :print_header "Build Successful!"
-echo The executable can be found in the 'dist\CodebaseToText' directory.
+echo The application folder can be found in the 'dist\CodebaseToText' directory.
+echo To distribute, you should ZIP the ENTIRE 'CodebaseToText' folder.
 
 :end_script
 echo.
@@ -82,28 +83,6 @@ REM =================================================
 REM                   SUBROUTINES
 REM (The script should not fall through to here)
 REM =================================================
-
-:clean_artifacts
-    call :print_header "Cleaning previous build artifacts..."
-    
-    if exist "dist" (
-        echo -^> Deleting 'dist' directory...
-        rmdir /s /q "dist"
-    )
-    
-    if exist "build" (
-        echo -^> Deleting 'build' directory...
-        rmdir /s /q "build"
-    )
-    
-    if exist "CodebaseToText.spec" (
-        echo -^> Deleting 'CodebaseToText.spec' file...
-        del /q "CodebaseToText.spec"
-    )
-    
-    echo.
-    echo Cleaning complete.
-    goto :eof
 
 :print_header
     echo.
