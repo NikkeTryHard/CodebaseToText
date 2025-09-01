@@ -1,2 +1,5 @@
-tkinterdnd2
-Pillow
+tkinterdnd2>=0.3.0
+Pillow>=8.0.0
+# Enhanced features dependencies
+# Note: tkinter is included with Python standard library
+# Additional packages for future enhancements can be added here

@@ -1,64 +1,235 @@
-# CodebaseToText
+# CodebaseToText v7.4 - Enhanced Edition
 
-This desktop application scans a directory and compiles the structure and contents of selected files into a single, markdown-formatted text file. This output is ideal for pasting into Large Language Model (LLM) prompts to provide context about a codebase.
+🎯 **Convert your codebase to LLM-ready markdown with enhanced UI and better user experience**
 
-## Features
+## ✨ What's New in v7.4
 
-- **Blazing Fast Generation:** An optimized architecture reads all file data during the initial scan, making the final text generation instantaneous.
-- **Interactive Tree View:** Easily check or uncheck files and folders to include in the output.
-- **In-App Ignore List Editor:** A new preferences window allows you to easily manage the list of ignored files and folders (e.g., `.git`, `node_modules`) without manually editing config files.
-- **Multi-threaded Scanning:** The initial directory scan is multi-threaded for a significant speed boost on large codebases.
-- **Drag-and-Drop:** Simply drop a folder onto the application window to start scanning.
-- **Smart Formatting:** Generates an annotated directory tree with file line counts and combines file contents into markdown code blocks, automatically detecting the language for syntax highlighting.
-- **Session Persistence:** Remembers window size and the last used folder between sessions.
+### 🎨 Enhanced User Interface
 
-## Installation
+- **Modern Design**: Clean, intuitive interface with better spacing and typography
+- **Visual Feedback**: Hover effects, animations, and status indicators
+- **Icons & Emojis**: Visual elements for better user understanding
+- **Responsive Layout**: Better window sizing and component arrangement
 
-1.  Ensure you have Python 3 installed.
-2.  Clone this repository or download the source code.
-3.  Install the required dependency using pip:
-    ```bash
-    pip install -r requirements.txt
-    ```
+### 🚀 Improved User Experience
 
-## Usage
+- **Drag & Drop**: Enhanced folder selection with visual feedback
+- **Keyboard Shortcuts**: Ctrl+O (open), Ctrl+S (settings), Ctrl+Q (quit), F5 (refresh)
+- **Context Menus**: Right-click support for tree items
+- **Progress Tracking**: Real-time progress bars and status updates
+- **Smart Validation**: Better error messages and user guidance
 
-Run the application from the command line:
+### 🛡️ Enhanced Error Handling & Robustness
+
+- **Comprehensive Error Handling**: Graceful handling of file system errors
+- **User-Friendly Messages**: Clear, actionable error messages
+- **Fallback Mechanisms**: Automatic recovery from common issues
+- **Debug Mode**: Enhanced logging for troubleshooting
+
+### ⚡ Performance Improvements
+
+- **Optimized Scanning**: Faster directory processing
+- **Memory Management**: Better handling of large codebases
+- **Threading**: Improved background operations
+- **Caching**: Smart caching for repeated operations
+
+### 🔧 Advanced Configuration
+
+- **Enhanced Settings**: More configuration options
+- **Theme Support**: Dark/Light theme switching
+- **Customizable Ignore Lists**: Smart pattern matching
+- **Export/Import**: Configuration backup and sharing
+
+## 🚀 Features
+
+### Core Functionality
+
+- **Directory Scanning**: Fast, intelligent codebase analysis
+- **File Filtering**: Smart ignore patterns and file type detection
+- **Markdown Generation**: LLM-optimized output format
+- **Progress Tracking**: Real-time operation status
+
+### Enhanced UI Elements
+
+- **Tree View**: Interactive file/folder selection with checkboxes
+- **Status Bar**: Real-time operation feedback
+- **Progress Bars**: Visual progress indication
+- **Tooltips**: Helpful information on hover
+
+### Advanced Options
+
+- **File Size Limits**: Configurable maximum file sizes
+- **Threading Control**: Adjustable thread counts
+- **Caching Options**: Performance optimization settings
+- **Verbose Logging**: Detailed operation logging
+
+## 🎯 Use Cases
+
+- **AI/LLM Development**: Prepare codebases for AI analysis
+- **Documentation**: Generate comprehensive code documentation
+- **Code Review**: Share code with team members
+- **Learning**: Study codebases in a readable format
+- **Archiving**: Create searchable code archives
+
+## 🛠️ Installation
+
+### Prerequisites
+
+- Python 3.8 or higher
+- Windows, macOS, or Linux
+
+### Quick Start
 
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd CodebaseToText
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
 python main.py
 ```
 
-For more detailed logging in the terminal, use the verbose flag:
+### Command Line Options
 
 ```bash
-python main.py -v
+python main.py --help
+python main.py -v                    # Verbose mode
+python main.py --debug               # Debug mode
+python main.py --config custom.ini   # Custom config file
 ```
 
-## Future Improvements & TODO
+## 📖 Usage
 
-Here are some planned features and ideas for future versions:
+### Basic Workflow
 
-- **Treeview Search/Filter:** Add a search bar above the treeview to filter files and folders by name. This would be extremely useful for navigating large codebases.
+1. **Select Folder**: Choose your codebase root directory
+2. **Review Files**: Browse and select files to include
+3. **Generate Output**: Create LLM-ready markdown
+4. **Copy/Save**: Use the output as needed
 
-  - _Implementation Idea: Bind to the `<KeyRelease>` event on an Entry widget, then recursively traverse the tree to hide non-matching items._
+### Advanced Features
 
-- **Theme Toggle:** Add a menu item to switch between light and dark themes on-the-fly and save the preference to the config file.
+- **Drag & Drop**: Drop folders directly onto the application
+- **Keyboard Navigation**: Use arrow keys and spacebar in tree view
+- **Context Menus**: Right-click for additional options
+- **Settings**: Customize behavior in Preferences
 
-  - _Implementation Idea: The `azure.tcl` theme engine already supports this; just need to call the `set_theme` procedure and update the config._
+### Keyboard Shortcuts
 
-- **Direct Export Options:** Add buttons in the output window to save the generated text directly to a file (`.md`, `.txt`) or to copy the content automatically.
+- `Ctrl+O`: Open folder dialog
+- `Ctrl+S`: Open settings
+- `Ctrl+Q`: Quit application
+- `F5`: Refresh tree view
+- `Space`: Toggle file selection
+- `Enter`: Open file or expand folder
 
-  - _Implementation Idea: Could also explore exporting as a `.zip` archive containing the original selected files._
+## ⚙️ Configuration
 
-- **File Preview:** Implement a feature to double-click a file in the treeview to open a small, read-only preview window showing its content. This would help users decide what to include without leaving the application.
+### Settings File
 
-- **Total Stats Display:** Show useful statistics in the status bar after a scan is complete, such as "X files selected, Y total lines of code".
+The application creates a `config.ini` file with your preferences:
 
-  - _Implementation Idea: Could also estimate the final output size in characters or tokens during generation._
+```ini
+[Settings]
+width = 900
+height = 800
+theme = dark
+max_file_size = 10
+auto_save = True
+verbose = False
 
-- **Ignore Patterns with Wildcards:** Enhance the ignore list to support glob patterns (e.g., `*.pyc`, `*.log`) in addition to exact names.
+[Advanced]
+scan_timeout = 300
+max_threads = 4
+chunk_size = 50000
+```
 
-  - _Implementation Idea: Use Python's `fnmatch` library for pattern matching against file and directory names._
+### Ignore Patterns
 
-- **LLM Prompt Templates:** Add a dropdown menu near the "Generate" button with pre-built prompt starters (e.g., "Analyze this codebase for potential bugs:", "Refactor the following code for better readability:") that get prepended to the final output.
+Customize which files to ignore:
+
+```
+# Build directories
+node_modules/
+build/
+dist/
+
+# Cache files
+*.log
+*.tmp
+*.cache
+
+# OS files
+.DS_Store
+Thumbs.db
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+- **Large Files**: Adjust `max_file_size` in settings
+- **Slow Performance**: Reduce `max_threads` or disable animations
+- **Memory Issues**: Increase `chunk_size` for better memory management
+
+### Debug Mode
+
+Run with `--debug` flag for detailed logging:
+
+```bash
+python main.py --debug
+```
+
+### Error Reporting
+
+- Check console output for error details
+- Enable verbose mode with `-v` flag
+- Review log files in debug mode
+
+## 🚀 Performance Tips
+
+- **Use Ignore Lists**: Exclude unnecessary files and directories
+- **Adjust Thread Count**: Optimize for your system
+- **Enable Caching**: Improve repeated operations
+- **Disable Animations**: Better performance on slower systems
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our contributing guidelines for details.
+
+### Development Setup
+
+```bash
+# Clone and setup
+git clone <repository-url>
+cd CodebaseToText
+pip install -r requirements.txt
+
+# Run in development mode
+python main.py --debug
+```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🙏 Acknowledgments
+
+- **TkinterDnD2**: Drag and drop functionality
+- **Azure Theme**: Modern UI styling
+- **Python Community**: Excellent libraries and tools
+
+## 📞 Support
+
+- **Issues**: Report bugs and request features
+- **Documentation**: Check this README and inline code comments
+- **Community**: Join our discussions and share feedback
+
+---
+
+**Made with ❤️ for the AI/LLM development community**
+
+_Transform your codebases into AI-ready formats with ease and style!_
