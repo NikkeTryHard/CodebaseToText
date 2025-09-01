@@ -54,63 +54,48 @@ class UI:
         style.configure('Title.TLabel', font=('Segoe UI', 12, 'bold'))
         style.configure('Status.TLabel', font=('Segoe UI', 9))
         style.configure('Action.TButton', font=('Segoe UI', 10, 'bold'))
-        
-        main_frame = ttk.Frame(self.root, padding="15")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        main_frame.grid_rowconfigure(2, weight=1)  # Make the treeview frame expandable
-        main_frame.grid_columnconfigure(0, weight=1)
 
-        # --- Header with App Title ---
+        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame.grid_columnconfigure(0, weight=1)
+        main_frame.grid_rowconfigure(2, weight=1)  # Tree container should expand
+
+        # --- Header with App Title (Row 0) ---
         header_frame = ttk.Frame(main_frame)
-        header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 15))
+        header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         
         title_label = ttk.Label(header_frame, text="Codebase to Text Converter", style="Title.TLabel")
         title_label.pack(side=tk.LEFT)
         
-        subtitle_label = ttk.Label(header_frame, text="Convert your codebase to LLM-ready markdown", 
+        subtitle_label = ttk.Label(header_frame, text="Convert your codebase to LLM-ready markdown",
                                  foreground="gray", font=('Segoe UI', 9))
         subtitle_label.pack(side=tk.LEFT, padx=(10, 0))
 
-        # --- Folder Selection Frame ---
-        folder_frame = ttk.LabelFrame(main_frame, text="📁 Select Root Folder", padding="15")
-        folder_frame.grid(row=1, column=0, sticky="ew", pady=(0, 15))
-        folder_frame.grid_columnconfigure(0, weight=1)
-        
-        # Create a simple button frame for better visibility
-        button_frame = ttk.Frame(folder_frame)
-        button_frame.grid(row=0, column=0, sticky="ew", pady=(0, 15))
-        button_frame.grid_columnconfigure(0, weight=1)
-        
-        # Large, prominent Open Folder button - make it impossible to miss!
-        self.open_folder_button = ttk.Button(button_frame, text="Add Root Folder",
-                                           command=self.callbacks['select_folder'])
-        self.open_folder_button.grid(row=0, column=0, sticky="ew", ipady=10)
-        
-        # Folder path display section
-        path_label = ttk.Label(folder_frame, text="Selected folder:", font=('Segoe UI', 9, 'bold'))
-        path_label.grid(row=1, column=0, sticky="w", pady=(0, 5))
-        
-        path_frame = ttk.Frame(folder_frame)
-        path_frame.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        path_frame.grid_columnconfigure(0, weight=1)
-        
-        self.folder_entry = ttk.Entry(path_frame, textvariable=self.root_dir_var, 
-                                    state='readonly', font=('Segoe UI', 9))
-        self.folder_entry.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        
-        # Alternative browse button (smaller)
-        self.browse_button = ttk.Button(path_frame, text="Browse...", 
-                                      command=self.callbacks['select_folder'])
-        self.browse_button.grid(row=0, column=1)
-        
-        # Drag and drop hint
-        drop_hint = ttk.Label(folder_frame, text="💡 Tip: You can also drag and drop a folder here", 
-                            foreground="gray", font=('Segoe UI', 8))
-        drop_hint.grid(row=3, column=0, sticky="w", pady=(5, 0))
+        # --- Control Frame (Row 1) ---
+        control_frame = ttk.LabelFrame(main_frame, text="Controls", padding="10")
+        control_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        control_frame.grid_columnconfigure(1, weight=1)
 
-        # --- Treeview Frame ---
-        tree_container = ttk.LabelFrame(main_frame, text="📋 Select Files and Folders", padding="15")
-        tree_container.grid(row=2, column=0, sticky="nsew", pady=(0, 15))
+        self.open_folder_button = ttk.Button(control_frame, text="Add Root Folder",
+                                           command=self.callbacks['select_folder'])
+        self.open_folder_button.grid(row=0, column=0, padx=(0, 5))
+
+        self.folder_entry = ttk.Entry(control_frame, textvariable=self.root_dir_var,
+                                    state='readonly', font=('Segoe UI', 9))
+        self.folder_entry.grid(row=0, column=1, sticky="ew", padx=5)
+
+        self.generate_button = ttk.Button(control_frame, text="Generate Text",
+                                        command=self.callbacks['start_conversion'],
+                                        style="Accent.TButton", state='disabled')
+        self.generate_button.grid(row=0, column=2, padx=5)
+
+        self.cancel_button = ttk.Button(control_frame, text="Cancel",
+                                      command=self.callbacks['cancel_operation'], state='disabled')
+        self.cancel_button.grid(row=0, column=3, padx=(5, 0))
+
+        # --- Treeview Frame (Row 2) ---
+        tree_container = ttk.LabelFrame(main_frame, text="📋 Select Files and Folders", padding="10")
+        tree_container.grid(row=2, column=0, sticky="nsew")
         tree_container.grid_rowconfigure(0, weight=1)
         tree_container.grid_columnconfigure(0, weight=1)
         
@@ -119,11 +104,9 @@ class UI:
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
         
-        # Enhanced treeview with better styling
         self.tree = ttk.Treeview(tree_frame, show="tree", style="Treeview")
         self.tree.grid(row=0, column=0, sticky="nsew")
         
-        # Configure treeview style
         style.configure("Treeview", font=('Segoe UI', 9), rowheight=25)
         style.configure("Treeview.Heading", font=('Segoe UI', 9, 'bold'))
         
@@ -133,62 +116,35 @@ class UI:
 
         # --- Treeview Control Buttons ---
         button_control_frame = ttk.Frame(tree_container)
-        button_control_frame.grid(row=1, column=0, sticky="ew", pady=(15, 0))
+        button_control_frame.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         button_control_frame.grid_columnconfigure((0, 1, 2), weight=1)
         
-        # Enhanced buttons with icons and better styling
-        self.check_all_btn = ttk.Button(button_control_frame, text="✓ Check All", 
+        self.check_all_btn = ttk.Button(button_control_frame, text="✓ Check All",
                                        command=self.callbacks['check_all'], style="Action.TButton")
         self.check_all_btn.grid(row=0, column=0, sticky="ew", padx=(0, 5))
         
-        self.uncheck_all_btn = ttk.Button(button_control_frame, text="☐ Uncheck All", 
+        self.uncheck_all_btn = ttk.Button(button_control_frame, text="☐ Uncheck All",
                                          command=self.callbacks['uncheck_all'], style="Action.TButton")
         self.uncheck_all_btn.grid(row=0, column=1, sticky="ew", padx=5)
         
-        # Add a refresh button
-        self.refresh_btn = ttk.Button(button_control_frame, text="🔄 Refresh", 
+        self.refresh_btn = ttk.Button(button_control_frame, text="🔄 Refresh",
                                      command=self._refresh_tree, style="Action.TButton")
         self.refresh_btn.grid(row=0, column=2, sticky="ew", padx=(5, 0))
 
-        # --- Action Frame ---
-        action_frame = ttk.LabelFrame(main_frame, text="🚀 Generate Output", padding="15")
-        action_frame.grid(row=3, column=0, sticky="ew")
-        
-        # --- Button Container ---
-        button_container = ttk.Frame(action_frame)
-        button_container.pack(fill=tk.X, pady=(10, 0))
-        button_container.grid_columnconfigure(0, weight=1)
-        button_container.grid_columnconfigure(1, weight=1)
+        # --- Status Bar (Row 3) ---
+        status_bar = ttk.Frame(main_frame, padding=(0, 5))
+        status_bar.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        status_bar.grid_columnconfigure(0, weight=1)
 
-        self.generate_button = ttk.Button(button_container, text="🎯 Generate Text", 
-                                        command=self.callbacks['start_conversion'], 
-                                        style="Accent.TButton", state='disabled')
-        self.generate_button.grid(row=0, column=0, sticky="ew", padx=(0, 5), ipady=8)
+        self.status_label = ttk.Label(status_bar, text="Ready", style="Status.TLabel", anchor="w")
+        self.status_label.grid(row=0, column=0, sticky="ew")
 
-        self.cancel_button = ttk.Button(button_container, text="❌ Cancel", 
-                                      command=self.callbacks['cancel_operation'])
-        self.cancel_button.grid(row=0, column=1, sticky="ew", padx=(5, 0), ipady=8)
-        self.cancel_button.config(state='disabled')
+        self.progress_bar = ttk.Progressbar(status_bar, orient='horizontal',
+                                          mode='determinate', length=150)
+        self.progress_bar.grid(row=0, column=1, sticky="ew", padx=(10, 0))
 
-        # Enhanced status and progress
-        status_frame = ttk.Frame(action_frame)
-        status_frame.pack(fill=tk.X, pady=(15, 0))
-        
-        self.status_label = ttk.Label(status_frame, text="Ready to scan directory", 
-                                    style="Status.TLabel", anchor="w")
-        self.status_label.pack(fill=tk.X, pady=(0, 5))
-
-        # Enhanced progress bar with better styling
-        progress_frame = ttk.Frame(action_frame)
-        progress_frame.pack(fill=tk.X, pady=(0, 5))
-        
-        self.progress_bar = ttk.Progressbar(progress_frame, orient='horizontal', 
-                                          mode='determinate', length=300)
-        self.progress_bar.pack(fill=tk.X)
-        
-        # Progress text
-        self.progress_text = ttk.Label(progress_frame, text="", style="Status.TLabel", anchor="center")
-        self.progress_text.pack(fill=tk.X, pady=(2, 0))
+        self.progress_text = ttk.Label(status_bar, text="", style="Status.TLabel", anchor="w")
+        self.progress_text.grid(row=0, column=2, sticky="w", padx=(5, 0))
 
     def _setup_animations(self):
         """Setup animation effects for UI elements."""
@@ -197,7 +153,7 @@ class UI:
     def _setup_hover_effects(self):
         """Setup hover effects for interactive elements."""
         # Add hover effects to buttons
-        for btn in [self.open_folder_button, self.browse_button, self.check_all_btn, self.uncheck_all_btn,
+        for btn in [self.open_folder_button, self.check_all_btn, self.uncheck_all_btn,
                    self.refresh_btn, self.generate_button, self.cancel_button]:
             btn.bind('<Enter>', lambda e, b=btn: self._on_button_hover_enter(b))
             btn.bind('<Leave>', lambda e, b=btn: self._on_button_hover_leave(b))
@@ -269,14 +225,12 @@ class UI:
         if loading:
             self.generate_button.configure(state='disabled', text="⏳ Processing...")
             self.open_folder_button.configure(state='disabled')
-            self.browse_button.configure(state='disabled')
             self.check_all_btn.configure(state='disabled')
             self.uncheck_all_btn.configure(state='disabled')
             self.refresh_btn.configure(state='disabled')
         else:
-            self.generate_button.configure(state='normal', text="🎯 Generate Text")
+            self.generate_button.configure(state='normal', text="Generate Text")
             self.open_folder_button.configure(state='normal')
-            self.browse_button.configure(state='normal')
             self.check_all_btn.configure(state='normal')
             self.uncheck_all_btn.configure(state='normal')
             self.refresh_btn.configure(state='normal')
