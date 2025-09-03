@@ -134,6 +134,9 @@ class DirectoryToTextApp:
 
     def _load_folder(self, folder_path):
         """Load and scan a folder with enhanced error handling."""
+        if self.scan_thread and self.scan_thread.is_alive():
+            self.log_message("Scan already in progress. Ignoring request.")
+            return
         try:
             if not os.path.isdir(folder_path):
                 self._show_error(f"The selected path '{folder_path}' is not a valid directory.")
@@ -171,20 +174,20 @@ class DirectoryToTextApp:
         tree_data = None
         try:
             tree_data = scan_directory_fast(folder_path, self.ignored_items, cancel_event)
-            if tree_data and not cancel_event.is_set():
+            if cancel_event.is_set():
+                self.root.after(0, self._reset_ui_after_scan, True)
+            else:
                 self.scanned_tree_data = tree_data
                 self.root.after(0, self._populate_tree_ui, tree_data)
-            elif cancel_event.is_set():
-                self.root.after(0, self._reset_ui_after_scan, True)
                 
         except Exception as e:
             error_msg = f"Error scanning directory: {e}"
             self.log_message(error_msg)
             self.log_message(traceback.format_exc())
             self.root.after(0, lambda: self._show_error(error_msg))
+            self.root.after(0, self._reset_ui_after_scan, False)
         finally:
             self.log_message("Scan thread finished.")
-            self.root.after(0, self._reset_ui_after_scan, cancel_event.is_set())
 
     def _populate_tree_ui(self, tree_data):
         """Callback to update the treeview on the main thread."""
@@ -201,6 +204,9 @@ class DirectoryToTextApp:
         except Exception as e:
             self._log_error(f"Error populating tree UI: {e}")
             self._show_error(f"Failed to populate tree view: {e}")
+        finally:
+            # Always reset the UI after attempting to populate the tree
+            self.root.after(0, self._reset_ui_after_scan, False)
 
     def _reset_ui_after_scan(self, cancelled=False):
         """Resets the UI state after a scan finishes or is cancelled."""
@@ -366,6 +372,8 @@ class DirectoryToTextApp:
             
         except Exception as e:
             self._log_error(f"Error resetting UI after generation: {e}")
+        finally:
+            self.ui.show_loading_state(False)
 
     def _update_progress(self, current, total):
         """Update progress with enhanced feedback."""

@@ -247,6 +247,5 @@ class UI:
 
     def show_success_animation(self):
         """Show a brief success animation."""
-        original_text = self.generate_button.cget('text')
         self.generate_button.configure(text="✅ Success!")
-        self.root.after(1500, lambda: self.generate_button.configure(text=original_text))
+        self.root.after(1500, lambda: self.generate_button.configure(text="Generate Text"))
