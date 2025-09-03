@@ -1,5 +1,6 @@
 # scanner.py
 import os
+import fnmatch
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from constants import MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB
 from file_processor_utils import FileProcessingError, FileTooLargeError, BinaryFileError, _is_binary_file
@@ -62,7 +63,7 @@ def scan_directory(path, ignored_items, cancel_event=None):
 
 def _process_file_for_scan(file_path):
     """Worker function for the thread pool during scanning."""
-    details = {'line_count': None, 'error': None, 'content': None}
+    details = {'line_count': None, 'char_count': None, 'error': None, 'content': None}
     try:
         if os.path.getsize(file_path) > MAX_FILE_SIZE_BYTES:
             raise FileTooLargeError(f"> {MAX_FILE_SIZE_MB}MB")
@@ -73,50 +74,81 @@ def _process_file_for_scan(file_path):
             content = f.read()
         details['content'] = content
         details['line_count'] = content.count('\n') + 1
+        details['char_count'] = len(content)
 
     except (OSError, FileProcessingError) as e:
         details['error'] = str(e)
     
     return file_path, details
 
+def _is_path_ignored(relative_path, ignored_patterns):
+    """Check if a relative path matches any of the ignored patterns."""
+    # Normalize path separators for consistent matching
+    normalized_path = relative_path.replace(os.path.sep, '/')
+    for pattern in ignored_patterns:
+        # Simple name match
+        if fnmatch.fnmatch(os.path.basename(normalized_path), pattern):
+            return True
+        # Full path match
+        if fnmatch.fnmatch(normalized_path, pattern):
+            return True
+        # Directory content match
+        if pattern.endswith('/') and normalized_path.startswith(pattern.rstrip('/')):
+            return True
+    return False
+
 def scan_directory_fast(path, ignored_items, cancel_event=None):
     """
     Scans a directory using a thread pool to accelerate file analysis and correctly builds the tree structure,
-    including ignored files/folders which are marked accordingly.
+    including ignored files/folders which are marked accordingly using gitignore-style patterns.
     """
     if not os.path.isdir(path):
         return None
 
     nodes = {}
     file_paths_to_process = []
+    scan_root_path = os.path.abspath(path)
 
-    # First, build the entire directory and file structure map from a single walk
-    for root, dirs, files in os.walk(path, topdown=True):
+    for root, dirs, files in os.walk(scan_root_path, topdown=True):
         if cancel_event and cancel_event.is_set():
             return None
+
+        # Check if the current directory is ignored
+        relative_root = os.path.relpath(root, scan_root_path)
+        if relative_root != '.' and _is_path_ignored(relative_root, ignored_items):
+            dirs[:] = []  # Don't traverse further into this directory
+            continue
 
         # Add the directory node for the current root
         norm_root = os.path.normcase(os.path.abspath(root))
         if norm_root not in nodes:
             nodes[norm_root] = {
                 'path': root, 'name': os.path.basename(root), 'is_dir': True,
-                'is_ignored': os.path.basename(root) in ignored_items, 'children': []
+                'is_ignored': False, 'children': []
             }
 
-        # Process subdirectories, adding them to our node map
-        for dir_name in dirs:
+        # Process subdirectories
+        for dir_name in list(dirs):
             dir_path = os.path.join(root, dir_name)
+            relative_dir_path = os.path.relpath(dir_path, scan_root_path)
+            is_ignored = _is_path_ignored(relative_dir_path, ignored_items)
+            
+            if is_ignored:
+                dirs.remove(dir_name)  # Prune this directory from traversal
+            
             norm_path = os.path.normcase(os.path.abspath(dir_path))
             nodes[norm_path] = {
                 'path': dir_path, 'name': dir_name, 'is_dir': True,
-                'is_ignored': dir_name in ignored_items, 'children': []
+                'is_ignored': is_ignored, 'children': []
             }
 
-        # Process files, adding them to our node map
+        # Process files
         for file_name in files:
             file_path = os.path.join(root, file_name)
+            relative_file_path = os.path.relpath(file_path, scan_root_path)
+            is_ignored = _is_path_ignored(relative_file_path, ignored_items)
+            
             norm_path = os.path.normcase(os.path.abspath(file_path))
-            is_ignored = file_name in ignored_items
             nodes[norm_path] = {
                 'path': file_path, 'name': file_name, 'is_dir': False,
                 'is_ignored': is_ignored
@@ -124,10 +156,7 @@ def scan_directory_fast(path, ignored_items, cancel_event=None):
             if not is_ignored:
                 file_paths_to_process.append(file_path)
 
-        # Prune traversal into ignored directories for performance
-        dirs[:] = [d for d in dirs if d not in ignored_items]
-
-    # Process non-ignored files in parallel to get their content and line counts
+    # Process non-ignored files in parallel
     with ThreadPoolExecutor() as executor:
         future_to_path = {executor.submit(_process_file_for_scan, fp): fp for fp in file_paths_to_process}
         for future in as_completed(future_to_path):

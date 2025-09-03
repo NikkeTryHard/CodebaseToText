@@ -9,12 +9,14 @@ class TreeViewManager:
     Manages the Treeview widget, including population from a data structure,
     item checking, and event handling using robust image-based checkboxes.
     """
-    def __init__(self, tree_widget, root_window, log_callback, ignored_items, resource_path_func):
+    def __init__(self, tree_widget, root_window, log_callback, ignored_items, resource_path_func, ignore_callback=None):
         self.tree = tree_widget
         self.root = root_window
         self.log_message = log_callback
         self.ignored_items = ignored_items
+        self.ignore_callback = ignore_callback
         self.resource_path = resource_path_func
+        self.scanned_data = None
         self.animation_running = False
         self.last_click_time = 0
         self.double_click_delay = 300  # milliseconds
@@ -73,6 +75,7 @@ class TreeViewManager:
 
     def populate_from_data(self, root_node_data):
         """Populates the treeview using a pre-scanned dictionary structure with animation."""
+        self.scanned_data = root_node_data
         self.clear_tree()
         if not root_node_data:
             return
@@ -80,7 +83,7 @@ class TreeViewManager:
         # Wait for clear animation to complete
         self.root.after(100, lambda: self._populate_with_animation(root_node_data))
 
-    def _populate_with_animation(self, root_node_data, delay=50):
+    def _populate_with_animation(self, root_node_data, delay=5):
         """Populates the treeview with animation effects."""
         self.clear_tree()
         
@@ -126,7 +129,7 @@ class TreeViewManager:
                                       image=self.checked_img, values=[item_data['path'], "checked"])
                 
                 if item_data.get('children'):
-                    self._populate_recursive_animated(item_data['children'], item, 25)
+                    self._populate_recursive_animated(item_data['children'], item, 1)
                     
         except Exception as e:
             self.log_message(f"Error inserting item {item_data.get('name', 'unknown')}: {e}")
@@ -140,7 +143,9 @@ class TreeViewManager:
                 if error:
                     annotation = f"  ⚠️ [{error}]"
                 elif item_data.get('line_count') is not None:
-                    annotation = f"  📊 [{item_data['line_count']} lines]"
+                    lines = item_data['line_count']
+                    chars = item_data.get('char_count', 0)
+                    annotation = f"  📊 [{lines} lines, {chars} chars]"
                 elif item_data.get('size'):
                     size_kb = item_data['size'] / 1024
                     if size_kb > 1024:
@@ -297,14 +302,20 @@ class TreeViewManager:
             context_menu = tk.Menu(self.root, tearoff=0)
             
             values = self.tree.item(item_id, "values")
+            if values:
+                relative_path = os.path.relpath(values[0], self.root.global_app_instance.root_dir.get())
+                context_menu.add_command(label=f"Ignore '{os.path.basename(values[0])}'",
+                                      command=lambda: self._ignore_item(relative_path))
+                context_menu.add_separator()
+
             if values and os.path.isfile(values[0]):
-                context_menu.add_command(label="Open File", 
+                context_menu.add_command(label="Open File",
                                       command=lambda: self._open_file(values[0]))
-                context_menu.add_command(label="Copy Path", 
+                context_menu.add_command(label="Copy Path",
                                       command=lambda: self._copy_to_clipboard(values[0]))
                 context_menu.add_separator()
             
-            context_menu.add_command(label="Check Item", 
+            context_menu.add_command(label="Check Item",
                                   command=lambda: self.update_check_state(item_id, "checked"))
             context_menu.add_command(label="Uncheck Item", 
                                   command=lambda: self.update_check_state(item_id, "unchecked"))
@@ -321,6 +332,11 @@ class TreeViewManager:
             
         except Exception as e:
             self.log_message(f"Error showing context menu: {e}")
+
+    def _ignore_item(self, path_to_ignore):
+        """Handle the ignore item action."""
+        if self.ignore_callback:
+            self.ignore_callback(path_to_ignore)
 
     def _copy_to_clipboard(self, text):
         """Copy text to clipboard."""
@@ -496,6 +512,43 @@ class TreeViewManager:
             self.log_message("Tree refresh requested")
         except Exception as e:
             self.log_message(f"Error refreshing tree: {e}")
+
+    def sort_tree_data(self, sort_key):
+        """Sort the tree data and repopulate the view."""
+        if not self.scanned_data:
+            self.log_message("No data to sort.")
+            return
+        
+        self.log_message(f"Sorting by {sort_key}")
+
+        def get_sort_value(item):
+            if sort_key == 'Lines':
+                if item.get('is_dir'): return -1
+                return item.get('line_count') or 0
+            elif sort_key == 'Characters':
+                if item.get('is_dir'): return -1
+                return item.get('char_count') or 0
+            else: # 'Name'
+                return item.get('name', '').lower()
+
+        def sort_recursive(node):
+            if node.get('children'):
+                # Determine sort order
+                is_descending = sort_key in ['Lines', 'Characters']
+                
+                # Sort children based on the selected key
+                node['children'].sort(key=lambda x: (not x.get('is_dir', False), get_sort_value(x)), reverse=is_descending)
+                
+                # Log sorted children for debugging
+                if node['path'] == self.scanned_data['path']: # Log only top-level children
+                    sorted_names = [child['name'] for child in node['children'][:5]]
+                    self.log_message(f"Top 5 sorted items: {sorted_names}")
+
+                for child in node['children']:
+                    sort_recursive(child)
+        
+        sort_recursive(self.scanned_data)
+        self.populate_from_data(self.scanned_data)
 
     def get_tree_info(self):
         """Get information about the current tree state."""

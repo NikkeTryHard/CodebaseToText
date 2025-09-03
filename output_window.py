@@ -10,15 +10,19 @@ OUTPUT_CHARACTER_LIMIT = 1_000_000
 class EnhancedOutputWindow:
     """Enhanced output window with better UI and functionality."""
     
-    def __init__(self, parent_root, content, log_callback):
+    def __init__(self, parent_root, content, log_callback, config_manager):
         self.parent_root = parent_root
         self.content = content
         self.log_callback = log_callback
+        self.config = config_manager
         self.animation_running = False
         
         self.output_win = tk.Toplevel(parent_root)
         self.output_win.title("Generated Output (LLM-Ready Markdown)")
-        self.output_win.geometry("1000x800")
+        
+        # Get geometry from config or use default
+        geometry = self.config.get_setting('Settings', 'output_window_geometry', fallback="1000x800")
+        self.output_win.geometry(geometry)
         self.output_win.minsize(800, 600)
         
         # Center the window
@@ -27,6 +31,7 @@ class EnhancedOutputWindow:
         # Setup window behavior
         self.output_win.transient(parent_root)
         self.output_win.grab_set()
+        self.output_win.protocol("WM_DELETE_WINDOW", self.on_close)
         
         # Create UI
         self._create_ui()
@@ -387,10 +392,21 @@ class EnhancedOutputWindow:
         except Exception as e:
             self.log_callback(f"Error updating info: {e}")
 
-def show_output_window(parent_root, content, log_callback):
+    def on_close(self):
+        """Handle window closing."""
+        try:
+            # Save geometry
+            self.config.set_setting('Settings', 'output_window_geometry', self.output_win.geometry())
+            self.config.save_config()
+        except Exception as e:
+            self.log_callback(f"Error saving output window geometry: {e}")
+        finally:
+            self.output_win.destroy()
+
+def show_output_window(parent_root, content, log_callback, config_manager):
     """Creates and displays the enhanced output window."""
     try:
-        window = EnhancedOutputWindow(parent_root, content, log_callback)
+        window = EnhancedOutputWindow(parent_root, content, log_callback, config_manager)
         return window
     except Exception as e:
         log_callback(f"Error creating output window: {e}")

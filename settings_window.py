@@ -21,7 +21,7 @@ class EnhancedSettingsWindow(tk.Toplevel):
         
         # Center the window relative to the parent
         self._center_window()
-        self.minsize(500, 400)
+        self.minsize(600, 500)
 
         self._create_ui()
         self._setup_animations()
@@ -120,10 +120,10 @@ class EnhancedSettingsWindow(tk.Toplevel):
         text_frame.grid_columnconfigure(0, weight=1)
         
         self.text_area = scrolledtext.ScrolledText(
-            text_frame, 
-            wrap=tk.WORD, 
-            height=8,
-            font=('Consolas', 9),
+            text_frame,
+            wrap=tk.WORD,
+            height=12,
+            font=('Consolas', 10),
             padx=10,
             pady=10,
             selectbackground="#0078d4",

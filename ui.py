@@ -72,7 +72,7 @@ class UI:
         subtitle_label.pack(side=tk.LEFT, padx=(10, 0))
 
         # --- Control Frame (Row 1) ---
-        control_frame = ttk.LabelFrame(main_frame, text="Controls", padding="10")
+        control_frame = ttk.Frame(main_frame)
         control_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         control_frame.grid_columnconfigure(1, weight=1)
 
@@ -117,7 +117,7 @@ class UI:
         # --- Treeview Control Buttons ---
         button_control_frame = ttk.Frame(tree_container)
         button_control_frame.grid(row=1, column=0, sticky="ew", pady=(10, 0))
-        button_control_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        button_control_frame.grid_columnconfigure(3, weight=1) # Give extra space to the right
         
         self.check_all_btn = ttk.Button(button_control_frame, text="✓ Check All",
                                        command=self.callbacks['check_all'], style="Action.TButton")
@@ -129,7 +129,17 @@ class UI:
         
         self.refresh_btn = ttk.Button(button_control_frame, text="🔄 Refresh",
                                      command=self._refresh_tree, style="Action.TButton")
-        self.refresh_btn.grid(row=0, column=2, sticky="ew", padx=(5, 0))
+        self.refresh_btn.grid(row=0, column=2, sticky="ew", padx=(5, 15))
+
+        # Sorting controls
+        sort_label = ttk.Label(button_control_frame, text="Sort by:")
+        sort_label.grid(row=0, column=4, padx=(10, 5))
+        
+        self.sort_var = tk.StringVar(value="Name")
+        self.sort_combo = ttk.Combobox(button_control_frame, textvariable=self.sort_var,
+                                     values=['Name', 'Lines', 'Characters'], state='readonly', width=12)
+        self.sort_combo.grid(row=0, column=5)
+        self.sort_combo.bind("<<ComboboxSelected>>", lambda e: self.callbacks['sort_tree'](self.sort_var.get()))
 
         # --- Status Bar (Row 3) ---
         status_bar = ttk.Frame(main_frame, padding=(0, 5))
@@ -160,7 +170,7 @@ class UI:
 
     def _on_button_hover_enter(self, button):
         """Handle button hover enter event."""
-        if button.cget('state') != 'disabled':
+        if button.cget('state') != 'disabled' and button != self.generate_button:
             button.configure(style='Accent.TButton')
 
     def _on_button_hover_leave(self, button):

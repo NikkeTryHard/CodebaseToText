@@ -54,7 +54,7 @@ class DirectoryToTextApp:
         
         # Load last folder if available
         if self.root_dir.get() and os.path.isdir(self.root_dir.get()):
-            self._load_folder(self.root_dir.get())
+            self.root.after(100, lambda: self._load_folder(self.root_dir.get()))
 
     def _setup_window(self):
         """Setup the main window with enhanced configuration."""
@@ -98,6 +98,7 @@ class DirectoryToTextApp:
             'show_about': self.show_about,
             'show_settings': self.show_settings,
             'refresh_tree': self._refresh_tree,
+            'sort_tree': self.sort_tree,
         }
         
         self.ui = UI(self.root, callbacks, self.root_dir)
@@ -109,9 +110,11 @@ class DirectoryToTextApp:
         # Setup tree manager
         self.ignored_items = self.config.get_ignored_set()
         self.tree_manager = TreeViewManager(
-            self.ui.tree, self.root, self.log_message, 
-            self.ignored_items, resource_path
+            self.ui.tree, self.root, self.log_message,
+            self.ignored_items, resource_path,
+            ignore_callback=self.add_to_ignore_list
         )
+        self.root.global_app_instance = self # For context menu access
 
     def _setup_event_bindings(self):
         """Setup event bindings with error handling."""
@@ -177,13 +180,16 @@ class DirectoryToTextApp:
         except Exception as e:
             error_msg = f"Error scanning directory: {e}"
             self.log_message(error_msg)
+            self.log_message(traceback.format_exc())
             self.root.after(0, lambda: self._show_error(error_msg))
         finally:
-            self.root.after(0, self._reset_ui_after_scan, (tree_data is None))
+            self.log_message("Scan thread finished.")
+            self.root.after(0, self._reset_ui_after_scan, cancel_event.is_set())
 
     def _populate_tree_ui(self, tree_data):
         """Callback to update the treeview on the main thread."""
         try:
+            self.log_message("Populating tree UI...")
             self._update_status("Scan complete. Populating UI...", "blue")
             self.log_message("Scan complete. Populating UI.")
             self.tree_manager.populate_from_data(tree_data)
@@ -199,6 +205,7 @@ class DirectoryToTextApp:
     def _reset_ui_after_scan(self, cancelled=False):
         """Resets the UI state after a scan finishes or is cancelled."""
         try:
+            self.log_message(f"Resetting UI after scan. Cancelled: {cancelled}")
             self._set_ui_state(scanning=False)
             self.current_operation = None
             
@@ -324,7 +331,7 @@ class DirectoryToTextApp:
             self.log_message("Generation complete. Opening output window.")
             self._update_status("Generation complete! Opening output window...", "green")
             
-            window = show_output_window(self.root, content, self.log_message)
+            window = show_output_window(self.root, content, self.log_message, self.config)
             if not window:
                 self._show_error("Failed to create output window.")
                 
@@ -493,18 +500,54 @@ Enhanced for better user experience"""
         except Exception as e:
             self._log_error(f"Error checking all: {e}")
             
-    def uncheck_all(self): 
+    def uncheck_all(self):
         try:
             self.tree_manager.uncheck_all()
         except Exception as e:
             self._log_error(f"Error unchecking all: {e}")
+
+    def sort_tree(self, sort_key):
+        """Sort the tree view based on the selected key."""
+        try:
+            self.log_message(f"Sorting tree by: {sort_key}")
+            self.tree_manager.sort_tree_data(sort_key)
+        except Exception as e:
+            self._log_error(f"Error sorting tree: {e}")
+
+    def add_to_ignore_list(self, item_path):
+        """Add an item to the ignore list and re-scan."""
+        try:
+            # Normalize the path for consistency
+            normalized_path = item_path.replace(os.path.sep, '/')
+            
+            # Get current ignore list
+            current_ignore_list = self.config.get_setting('Settings', 'ignore_list')
+            ignore_lines = current_ignore_list.split('\n')
+            
+            # Add the new item if it's not already there
+            if normalized_path not in ignore_lines:
+                new_ignore_list = current_ignore_list + '\n' + normalized_path
+                self.config.set_setting('Settings', 'ignore_list', new_ignore_list.strip())
+                self.config.save_config()
+                
+                # Update in-memory ignore list for the current session
+                self.ignored_items = self.config.get_ignored_set()
+                self.tree_manager.ignored_items = self.ignored_items
+                
+                self.log_message(f"Added '{normalized_path}' to ignore list. Refreshing...")
+                self._refresh_tree()
+            else:
+                self.log_message(f"'{normalized_path}' is already in the ignore list.")
+
+        except Exception as e:
+            self._log_error(f"Error adding to ignore list: {e}")
 
     def on_closing(self):
         """Handle application closing with enhanced cleanup."""
         try:
             # Cancel any ongoing operations
             if self.current_operation:
-                if messagebox.askyesno("Confirm Exit", 
+                if messagebox.askyesno("Confirm Exit",
                                      f"A {self.current_operation} operation is in progress. "
                                      "Are you sure you want to exit?"):
                     self.cancel_scan.set()
@@ -516,7 +559,9 @@ Enhanced for better user experience"""
             self.config.config.read(self.config.config_file)
             self.config.set_setting('Settings', 'width', self.root.winfo_width())
             self.config.set_setting('Settings', 'height', self.root.winfo_height())
-            self.config.set_setting('Settings', 'last_folder', self.root_dir.get())
+            last_folder_to_save = self.root_dir.get()
+            self.log_message(f"Saving last_folder: {last_folder_to_save}")
+            self.config.set_setting('Settings', 'last_folder', last_folder_to_save)
             self.config.save_config()
             
             self.log_message("Application closing. Configuration saved.")

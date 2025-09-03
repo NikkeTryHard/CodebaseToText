@@ -264,10 +264,8 @@ class ConfigManager:
             user_list = set()
             
             if user_list_str:
-                # Split by comma and newline for flexibility
-                items = []
-                for line in user_list_str.split(','):
-                    items.extend(line.split('\n'))
+                # Process as a multi-line string, similar to .gitignore
+                items = user_list_str.split('\n')
                 
                 # Clean and filter items
                 for item in items:
