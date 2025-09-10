@@ -3,7 +3,7 @@ import sys
 import os
 import traceback
 from tkinterdnd2 import TkinterDnD
-from main_app import DirectoryToTextApp
+from main_app import main as main_app
 import argparse
 
 def setup_environment():
@@ -87,20 +87,8 @@ def main():
         print("✨ Enhanced UI with animations and better UX")
         print("🛡️ Improved error handling and robustness")
         
-        # Create and run the application
-        root = TkinterDnD.Tk()
-        
-        # Pass arguments to the app
-        app = DirectoryToTextApp(
-            root, 
-            verbose=args.verbose,
-            config_file=args.config
-        )
-        
-        print("✅ Application initialized successfully")
-        
-        # Start the main loop
-        root.mainloop()
+        # Run the application
+        main_app(args)
         
         print("👋 Application closed successfully")
         

@@ -2,7 +2,7 @@
 import os
 import time
 import traceback
-from file_processor_utils import get_language_identifier
+from utils.file_processor_utils import get_language_identifier
 
 def _flatten_tree_to_map(node):
     """Flattens the scanned tree data into a dictionary for fast lookups."""

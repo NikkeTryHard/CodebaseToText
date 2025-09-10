@@ -3,7 +3,7 @@ import os
 import fnmatch
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from constants import MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB
-from file_processor_utils import FileProcessingError, FileTooLargeError, BinaryFileError, _is_binary_file
+from utils.file_processor_utils import FileProcessingError, FileTooLargeError, BinaryFileError, _is_binary_file
 
 def scan_directory(path, ignored_items, cancel_event=None):
     """

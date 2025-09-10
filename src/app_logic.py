@@ -8,20 +8,13 @@ from tkinterdnd2 import DND_FILES
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from treeview_manager import TreeViewManager
-from output_window import show_output_window
+from ui.output_window import show_output_window
 from config_manager import ConfigManager
-from ui import UI
+from ui.main_window import UI
 from scanner import scan_directory_fast
 from generator import generate_text_content_fast
-from settings_window import show_settings_window
-
-def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller."""
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+from ui.settings_window import show_settings_window
+from utils.utils import resource_path
 
 class DirectoryToTextApp:
     """Enhanced main application class with better error handling and UI integration."""
