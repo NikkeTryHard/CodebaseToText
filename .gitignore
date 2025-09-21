@@ -4,3 +4,5 @@ build
 CodebaseToText.spec
 config.ini
 venv
+output.txt
+.DS_Store

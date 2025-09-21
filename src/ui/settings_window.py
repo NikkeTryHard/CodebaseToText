@@ -1,7 +1,6 @@
 # settings_window.py
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
-import os
 
 class EnhancedSettingsWindow(tk.Toplevel):
     """
@@ -39,7 +38,7 @@ class EnhancedSettingsWindow(tk.Toplevel):
             x = parent_x + (parent_width // 2) - (win_width // 2)
             y = parent_y + (parent_height // 2) - (win_height // 2)
             self.geometry(f"{win_width}x{win_height}+{x}+{y}")
-        except:
+        except Exception:
             # Fallback centering
             self.geometry("500x400")
 
@@ -104,7 +103,7 @@ class EnhancedSettingsWindow(tk.Toplevel):
         """Create the ignore list section."""
         ignore_frame = ttk.LabelFrame(parent, text="📁 Ignore List", padding="10")
         ignore_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
-        ignore_frame.grid_rowconfigure(0, weight=1)
+        ignore_frame.grid_rowconfigure(1, weight=1)
         ignore_frame.grid_columnconfigure(0, weight=1)
         
         # Description
@@ -255,7 +254,7 @@ class EnhancedSettingsWindow(tk.Toplevel):
             
             if invalid_lines:
                 messagebox.showwarning("Validation Warning", 
-                                     f"Some entries may not work as expected:\n\n" + 
+                                     "Some entries may not work as expected:\n\n" + 
                                      "\n".join(invalid_lines[:5]) + 
                                      ("\n..." if len(invalid_lines) > 5 else ""))
             else:
@@ -272,7 +271,7 @@ class EnhancedSettingsWindow(tk.Toplevel):
                 # Try to apply theme to current window for preview
                 self.tk.call('set_theme', theme)
                 messagebox.showinfo("Theme Preview", f"Previewing {theme} theme.\n\nNote: This is just a preview. The full theme will be applied after restart.")
-            except:
+            except Exception:
                 messagebox.showinfo("Theme Preview", f"Selected theme: {theme}\n\nTheme will be applied after restart.")
         else:
             messagebox.showerror("Invalid Theme", "Please select a valid theme.")
@@ -332,7 +331,8 @@ class EnhancedSettingsWindow(tk.Toplevel):
         # Center help window
         x = self.winfo_x() + 50
         y = self.winfo_y() + 50
-        help_window.geometry(f"+{x}+{y}")
+        # FIX: Use .format() to clear Ruff F541 warning.
+        help_window.geometry("+{}+{}".format(x, y))
         
         text_widget = scrolledtext.ScrolledText(help_window, wrap=tk.WORD, padx=15, pady=15)
         text_widget.pack(fill=tk.BOTH, expand=True)
@@ -366,8 +366,7 @@ class EnhancedSettingsWindow(tk.Toplevel):
         try:
             # Load ignore list
             ignore_list_str = self.config.get_setting('Settings', 'ignore_list')
-            items = [item.strip() for item in ignore_list_str.split(',') if item.strip()]
-            self.text_area.insert('1.0', '\n'.join(items))
+            self.text_area.insert('1.0', ignore_list_str)
             
             # Load theme
             theme = self.config.get_setting('Settings', 'theme')
@@ -392,10 +391,7 @@ class EnhancedSettingsWindow(tk.Toplevel):
         try:
             # Save ignore list
             text_content = self.text_area.get('1.0', tk.END).strip()
-            items = [item.strip() for item in text_content.split('\n') if item.strip()]
-            comma_separated_list = ','.join(items)
-            
-            self.config.set_setting('Settings', 'ignore_list', comma_separated_list)
+            self.config.set_setting('Settings', 'ignore_list', text_content)
             
             # Save theme
             self.config.set_setting('Settings', 'theme', self.theme_var.get())
